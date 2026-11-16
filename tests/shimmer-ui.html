@@ -28,6 +28,15 @@ setTimeout(() => {
     ok('menu uses legionnaire helmet SVG', !!shadow.querySelector('.bubble .bicon svg .helmet-crest'));
     const latestChat = document.querySelector('ol.cy-chat-l > li:last-child');
     ok('latest chat message remains intact', latestChat.textContent.includes('@faldoorch') && !latestChat.querySelector('[data-fds-mention]') && !latestChat.classList.contains('fds-name'));
+    const chatList = document.querySelector('ol.cy-chat-l');
+    model.cfg.nick = 'pupok309';
+    const dynamicChat = document.createElement('li');
+    dynamicChat.setAttribute('data-nick', 'pupok309');
+    dynamicChat.innerHTML = '<b data-nick="pupok309">pupok309</b> <span>динамическое @faldoorch</span>';
+    chatList.insertBefore(dynamicChat, chatList.firstElementChild);
+    model.scan();
+    ok('dynamic latest message remains visible', dynamicChat.isConnected && dynamicChat.textContent.includes('динамическое @faldoorch') && !dynamicChat.classList.contains('fds-name'));
+    ok('dynamic latest sender keeps shimmer', dynamicChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name'));
     model.loot.setState({
       round: { id: 'active', item_name: 'Тестовый меч', rarity: 'эпическая', status: 'active', ends_at: new Date(Date.now() + 120000).toISOString() },
       rolls: [{ id: 'r1', round_id: 'active', user_id: 'other', nick: 'pupok309', roll: 87 }],
@@ -64,7 +73,25 @@ setTimeout(() => {
       const timerAfter = shadow.querySelector('.loot-timer').textContent;
       ok('live timer updates without state reload', timerBefore !== timerAfter || timerAfter === 'завершён');
       ok('live timer disables roll after expiry', shadow.getElementById('fdsLootRoll').disabled && timerAfter === 'завершён');
-      document.getElementById('out').textContent = rows.join('\n') + '\n\nитог: ' + rows.filter((row) => row.startsWith('OK')).length + '/' + rows.length + ' OK';
+      model.cfg.nick = 'pupok309';
+      const observedChat = document.createElement('li');
+      observedChat.setAttribute('data-nick', 'pupok309');
+      observedChat.innerHTML = '<b data-nick="pupok309">pupok309</b> <span>сообщение через observer @faldoorch</span>';
+      chatList.appendChild(observedChat);
+      model.scan();
+      const finishObserverCheck = () => {
+        ok('observer message remains visible', observedChat.isConnected && observedChat.textContent.includes('сообщение через observer @faldoorch') && !observedChat.classList.contains('fds-name'));
+        ok('observer sender keeps shimmer', observedChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name'));
+        document.getElementById('out').textContent = rows.join('\n') + '\n\nитог: ' + rows.filter((row) => row.startsWith('OK')).length + '/' + rows.length + ' OK';
+      };
+      const waitForObserver = (left) => {
+        if (observedChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name') || left <= 0) {
+          finishObserverCheck();
+          return;
+        }
+        setTimeout(() => waitForObserver(left - 50), 50);
+      };
+      waitForObserver(1000);
     }, 3200);
   } catch (error) {
     document.getElementById('out').textContent = 'ERROR: ' + error.message + '\n' + error.stack;

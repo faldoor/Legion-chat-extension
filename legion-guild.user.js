@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Легион - Гильдейское расширение
 // @namespace    https://legiongame.gg/
-// @version      1.9.4
+// @version      1.9.5
 // @description  Гильдейское расширение для чата Легиона: переливание ника, общий список гильдии и безопасное распределение лута.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
 // @connect      xqwdpnpvfxvzmtmmupev.supabase.co
-// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.4/legion-guild.user.js
-// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.4/legion-guild.user.js
+// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.5/legion-guild.user.js
+// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.5/legion-guild.user.js
 // ==/UserScript==
 
 (function () {
@@ -698,12 +698,13 @@
 
   function isLiveChatItem(el) {
     const item = el && el.closest ? el.closest('ol.cy-chat-l > li') : null;
-    return !!(item && item.parentElement && item === item.parentElement.lastElementChild);
+    if (!item || !item.parentElement) return false;
+    return item === item.parentElement.firstElementChild || item === item.parentElement.lastElementChild;
   }
 
   function isLiveChatContainer(el) {
     const item = el && el.closest ? el.closest('ol.cy-chat-l > li') : null;
-    return !!(item && item === el && item.parentElement && item === item.parentElement.lastElementChild);
+    return !!(item && item === el);
   }
 
   function unwrapMentions() {
@@ -873,8 +874,10 @@
       el.classList.add('fds-name');
     };
 
-    const base = 'b[data-nick], [data-nick]';
+    const base = 'b[data-nick], a[data-nick], [data-nick]';
     document.querySelectorAll(base).forEach((el) => {
+      const chatItem = el.closest ? el.closest('ol.cy-chat-l > li') : null;
+      if (chatItem && !el.matches('b[data-nick], a[data-nick]')) return;
       if (isLiveChatContainer(el)) return;
       if (matchesText(elementText(el), set)) mark(el);
     });
