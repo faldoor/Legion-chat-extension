@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Легион - Гильдийское расширение
+// @name         Легион - Гильдейское расширение
 // @namespace    https://legiongame.gg/
-// @version      1.9.0
-// @description  Гильдийское расширение для чата Легиона: переливание ника, общий список гильдии и безопасное распределение лута.
+// @version      1.9.2
+// @description  Гильдейское расширение для чата Легиона: переливание ника, общий список гильдии и безопасное распределение лута.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
 // @match        https://play.multidonate.ru/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
 // @connect      xqwdpnpvfxvzmtmmupev.supabase.co
-// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.0/legion-guild.user.js
-// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.0/legion-guild.user.js
+// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.2/legion-guild.user.js
+// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.2/legion-guild.user.js
 // ==/UserScript==
 
 (function () {
@@ -1095,8 +1095,12 @@
       transition: transform .16s, box-shadow .16s;
     }
     .bubble .bicon {
-      color: #fff; font-size: 23px; line-height: 1; text-shadow: 0 1px 4px rgba(20, 8, 40, .55);
+      width: 31px; height: 31px; color: #fff; filter: drop-shadow(0 1px 3px rgba(20, 8, 40, .55));
     }
+    .bubble .bicon svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    .bubble .bicon .helmet-shine { opacity: .8; }
+    .bubble .bicon .helmet-shadow { opacity: .24; }
+    .bubble .bicon .helmet-crest { fill: #ffe7a3; stroke: #fff6d1; }
     .bubble:hover .ball {
       transform: scale(1.06);
       box-shadow: 0 18px 44px rgba(140, 90, 255, .66), inset 0 1px 0 rgba(255,255,255,.45);
@@ -1272,11 +1276,10 @@
     ).join('');
     shadow.getElementById('fdsLootBody').innerHTML =
       '<div class="loot-card">' +
-        '<div class="loot-kicker">' + (active ? 'Текущий предмет' : 'Разролл завершён') + '</div>' +
+        '<div class="loot-kicker" id="fdsLootKicker">' + (active ? 'Текущий предмет' : 'Разролл завершён') + '</div>' +
         '<div class="loot-item">' + escapeHtml(round.item_name) + '</div>' +
         '<div class="loot-meta"><span class="loot-rarity ' + rarityClass + '">' + escapeHtml(round.rarity) + '</span>' +
           '<span class="loot-timer ' + (active ? '' : 'done') + '">' + (active ? lootTimeLeft(round) : 'завершён') + '</span></div>' +
-        '<div class="loot-announcement">' + escapeHtml(lootAnnouncement(round)) + '</div>' +
         '<button class="loot-roll" type="button" id="fdsLootRoll" ' + ((!active || ownRoll) ? 'disabled' : '') + '>' + (ownRoll ? 'Ты уже роллил: ' + Number(lootState.rolls.find((row) => row.user_id === cloudSession.user.id && row.round_id === round.id).roll) : (active ? 'Роллить' : 'Время истекло')) + '</button>' +
       '</div>' +
       '<div class="sec"><div class="sec-h"><span class="sec-t">Журнал роллов</span><span class="val">' + lootState.rolls.length + '</span></div>' +
@@ -1301,7 +1304,15 @@
     const timer = shadow.querySelector('.loot-timer');
     if (!timer) return;
     const next = active ? lootTimeLeft(lootState.round) : 'завершён';
-    if (timer.textContent !== next) renderLootPanel();
+    if (timer.textContent !== next) timer.textContent = next;
+    timer.classList.toggle('done', !active);
+    const kicker = shadow.getElementById('fdsLootKicker');
+    if (kicker) kicker.textContent = active ? 'Текущий предмет' : 'Разролл завершён';
+
+    const rollButton = shadow.getElementById('fdsLootRoll');
+    if (!rollButton || isOwnLootRoll(lootState.round)) return;
+    rollButton.disabled = !active;
+    rollButton.textContent = active ? 'Роллить' : 'Время истекло';
   }
 
   function buildPanel() {
@@ -1314,7 +1325,7 @@
         <div class="head" id="fdsDrag">
           <div class="logo">✦</div>
           <div class="titles">
-            <div class="title">Гильдийское расширение</div>
+            <div class="title">Гильдейское расширение</div>
             <div class="sub" id="fdsSub">Переливание ника · твой ник</div>
           </div>
           <button class="x" type="button" data-close aria-label="Свернуть в кружок" title="Свернуть в кружок">✕</button>
@@ -1393,9 +1404,18 @@
             <button class="btn loot-back" type="button" id="fdsLootBack">← К настройкам</button>
           </div>
         </section>
-      <button class="bubble" type="button" hidden aria-label="Открыть настройки переливания" title="Переливание ника · настройки">
-        <span class="halo"></span>
-        <span class="ball"><span class="bicon">✦</span></span>
+       <button class="bubble" type="button" hidden aria-label="Открыть настройки переливания" title="Переливание ника · настройки">
+         <span class="halo"></span>
+         <span class="ball"><span class="bicon" aria-hidden="true">
+           <svg viewBox="0 0 48 48" role="img" aria-label="Легионерский шлем">
+             <path d="M9 28c0-10.8 6.7-18 15-18s15 7.2 15 18v6H9z" fill="#dfe7ff" stroke="#fff" stroke-width="1.5"/>
+             <path class="helmet-shadow" d="M9 28h30v6H9zM14 18c3-4 6.3-5.8 10-5.8V34H14z" fill="#7f8fc5"/>
+             <path d="M7 27h34v7H7z" fill="#b9c8f5" stroke="#fff" stroke-width="1.5"/>
+             <path d="M11 34v5h8v-5m10 0v5h8v-5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+             <path class="helmet-crest" d="M24 4l3 7h-6z" stroke-width="1"/>
+             <path class="helmet-shine" d="M15 16c2.2-2.2 4.8-3.4 7.4-3.8" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+           </svg>
+         </span></span>
       </button>
     `;
     document.documentElement.appendChild(host);

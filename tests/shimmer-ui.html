@@ -25,6 +25,7 @@ setTimeout(() => {
     model.open();
     const shadow = document.getElementById('fds-host').shadowRoot;
     ok('loot window exists', !!shadow.getElementById('fdsLootWindow'));
+    ok('menu uses legionnaire helmet SVG', !!shadow.querySelector('.bubble .bicon svg .helmet-crest'));
     model.loot.setState({
       round: { id: 'active', item_name: 'Тестовый меч', rarity: 'эпическая', status: 'active', ends_at: new Date(Date.now() + 120000).toISOString() },
       rolls: [{ id: 'r1', round_id: 'active', user_id: 'other', nick: 'pupok309', roll: 87 }],
@@ -35,7 +36,8 @@ setTimeout(() => {
     model.refresh();
     model.loot.open();
     ok('item and rarity render', shadow.getElementById('fdsLootBody').textContent.includes('Тестовый меч') && shadow.getElementById('fdsLootBody').textContent.includes('эпическая'));
-    ok('announcement stays in UI', shadow.getElementById('fdsLootBody').textContent.includes('ВНИМАНИЕ ЛЕГИОН!'));
+    ok('announcement stays in UI', shadow.getElementById('fdsLootNotice').textContent.includes('ВНИМАНИЕ ЛЕГИОН!'));
+    ok('announcement is not duplicated', shadow.querySelectorAll('.loot-announcement').length === 1);
     ok('journal renders roll', shadow.querySelector('.loot-journal').textContent.includes('87'));
     ok('participant cannot see owner controls', shadow.getElementById('fdsLootOwner').hidden && !shadow.getElementById('fdsLootLogin').hidden);
     model.cfg.nick = 'faldoorch';
@@ -49,7 +51,18 @@ setTimeout(() => {
     ok('expired round disables roll', shadow.getElementById('fdsLootRoll').disabled);
     model.loot.setState({ round: null, rolls: [], server_now: new Date().toISOString() });
     ok('empty state renders', shadow.getElementById('fdsLootBody').textContent.includes('нет активного разролла'));
-    document.getElementById('out').textContent = rows.join('\n') + '\n\nитог: ' + rows.filter((row) => row.startsWith('OK')).length + '/' + rows.length + ' OK';
+    model.loot.setState({
+      round: { id: 'live-timer', item_name: 'Live timer', rarity: 'серая', status: 'active', ends_at: new Date(Date.now() + 60000).toISOString() },
+      rolls: [], server_now: new Date().toISOString(),
+    });
+    const timerBefore = shadow.querySelector('.loot-timer').textContent;
+    model.loot.state().round.ends_at = new Date(Date.now() - 1000).toISOString();
+    setTimeout(() => {
+      const timerAfter = shadow.querySelector('.loot-timer').textContent;
+      ok('live timer updates without state reload', timerBefore !== timerAfter || timerAfter === 'завершён');
+      ok('live timer disables roll after expiry', shadow.getElementById('fdsLootRoll').disabled && timerAfter === 'завершён');
+      document.getElementById('out').textContent = rows.join('\n') + '\n\nитог: ' + rows.filter((row) => row.startsWith('OK')).length + '/' + rows.length + ' OK';
+    }, 3200);
   } catch (error) {
     document.getElementById('out').textContent = 'ERROR: ' + error.message + '\n' + error.stack;
   }
