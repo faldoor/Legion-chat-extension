@@ -38,6 +38,7 @@ setTimeout(() => {
     model.refresh();
     model.loot.open();
     ok('item and rarity render', shadow.getElementById('fdsLootBody').textContent.includes('Тестовый меч') && shadow.getElementById('fdsLootBody').textContent.includes('эпическая'));
+    ok('latest sender keeps shimmer', latestChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name'));
     ok('announcement stays in UI', shadow.getElementById('fdsLootNotice').textContent.includes('ВНИМАНИЕ ЛЕГИОН!'));
     ok('announcement is not duplicated', shadow.querySelectorAll('.loot-announcement').length === 1);
     ok('journal renders roll', shadow.querySelector('.loot-journal').textContent.includes('87'));

@@ -13,7 +13,7 @@ Userscript для чата Legion Game:
 
 1. Установить [Tampermonkey](https://www.tampermonkey.net/).
 2. Открыть raw-файл userscript:
-   <https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.3/legion-guild.user.js>
+   <https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.4/legion-guild.user.js>
 3. Нажать **Install**.
 
 Стили работают только у пользователей, у которых установлен этот userscript.
