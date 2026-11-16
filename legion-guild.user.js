@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Легион - Гильдийское расширение
 // @namespace    https://legiongame.gg/
-// @version      1.4.0
+// @version      1.5.0
 // @description  Гильдийское расширение для чата Легиона: красивое анимированное переливание ника, общий список гильдии, настройки у каждого в браузере.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
@@ -120,6 +120,9 @@
   function paintForNick(value) {
     if (!cfg.shared) return null;
     const key = cleanNick(value);
+    const local = [cfg.nick, ...String(cfg.aliases || '').split(/[\s,;]+/)]
+      .some((nick) => cleanNick(nick) === key);
+    if (local) return null;
     const id = key ? sharedPaints[key] : '';
     return id ? paintById(id) : null;
   }
