@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Легион - Гильдийское расширение
 // @namespace    https://legiongame.gg/
-// @version      1.7.0
+// @version      1.8.0
 // @description  Гильдийское расширение для чата Легиона: красивое анимированное переливание ника, общий список гильдии, настройки у каждого в браузере.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
 // @connect      xqwdpnpvfxvzmtmmupev.supabase.co
-// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/legion-guild.user.js
-// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/legion-guild.user.js
+// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/legion-guild.user.js?v=1.8.0
+// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/legion-guild.user.js?v=1.8.0
 // ==/UserScript==
 
 (function () {
