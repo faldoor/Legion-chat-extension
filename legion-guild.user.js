@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Легион - Гильдийское расширение
 // @namespace    https://legiongame.gg/
-// @version      1.5.0
+// @version      1.7.0
 // @description  Гильдийское расширение для чата Легиона: красивое анимированное переливание ника, общий список гильдии, настройки у каждого в браузере.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
@@ -12,6 +12,7 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
+// @connect      xqwdpnpvfxvzmtmmupev.supabase.co
 // @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/legion-guild.user.js
 // @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/legion-guild.user.js
 // ==/UserScript==
@@ -29,6 +30,10 @@
   const SHARED_URL = 'https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/paints.json';
   const SHARED_KEY = 'fds_shared_v1';
   const SHARED_TTL = 6 * 60 * 60 * 1000;
+  const SUPABASE_URL = 'https://xqwdpnpvfxvzmtmmupev.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_qK3o1yioybygYWo3R-BQvA_ks7maFKn';
+  const SUPABASE_AUTH_KEY = 'fds_supabase_auth_v1';
+  const CLOUD_POLL_MS = 30000;
 
   const PAINTS = [
     { id: 'aurora',  name: 'Аврора',     glow: '124,140,255', colors: ['#6ef3ff', '#7c8cff', '#d16bff', '#ff8ad8'] },
@@ -100,6 +105,16 @@
   let sharedPaints = {};
   let sharedStamp = 0;
   let sharedState = 'idle';
+  let cloudPaints = {};
+  let cloudRows = {};
+  let cloudSession = null;
+  let cloudAuthPromise = null;
+  let cloudState = 'idle';
+  let cloudSocket = null;
+  let cloudHeartbeat = 0;
+  let cloudPoll = 0;
+  let cloudPublishTimer = 0;
+  let cloudSyncInterval = 0;
 
   function paintById(id) {
     return PAINTS.find((p) => p.id === id) || null;
@@ -118,13 +133,17 @@
   }
 
   function paintForNick(value) {
-    if (!cfg.shared) return null;
     const key = cleanNick(value);
     const local = [cfg.nick, ...String(cfg.aliases || '').split(/[\s,;]+/)]
       .some((nick) => cleanNick(nick) === key);
-    if (local) return null;
-    const id = key ? sharedPaints[key] : '';
+    if (local) return currentPaint();
+    if (!cfg.shared) return null;
+    const id = key ? (cloudPaints[key] || sharedPaints[key]) : '';
     return id ? paintById(id) : null;
+  }
+
+  function allSharedPaints() {
+    return Object.assign({}, sharedPaints, cloudPaints);
   }
 
   function readSharedCache() {
@@ -211,6 +230,236 @@
     }
   }
 
+  /* ---------- realtime guild sync ---------- */
+
+  function readCloudCache() {
+    let raw = '';
+    try { if (typeof GM_getValue === 'function') raw = GM_getValue(SUPABASE_AUTH_KEY, ''); } catch (e) { raw = ''; }
+    if (!raw) {
+      try { raw = localStorage.getItem(SUPABASE_AUTH_KEY) || ''; } catch (e) { raw = ''; }
+    }
+    const cached = readJson(raw);
+    if (!cached || typeof cached !== 'object') return;
+    if (cached.session && cached.session.access_token) cloudSession = cached.session;
+    if (cached.rows && typeof cached.rows === 'object') {
+      cloudRows = cached.rows;
+      rebuildCloudPaints();
+    }
+  }
+
+  function writeCloudCache() {
+    const raw = JSON.stringify({ session: cloudSession, rows: cloudRows });
+    try { if (typeof GM_setValue === 'function') GM_setValue(SUPABASE_AUTH_KEY, raw); } catch (e) { /* ignore */ }
+    try { localStorage.setItem(SUPABASE_AUTH_KEY, raw); } catch (e) { /* ignore */ }
+  }
+
+  function cloudRequest(method, path, body, token) {
+    const url = SUPABASE_URL + path;
+    const headers = {
+      apikey: SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=representation',
+    };
+    if (token) headers.Authorization = 'Bearer ' + token;
+    return new Promise((resolve, reject) => {
+      const done = (status, text) => {
+        const value = readJson(text);
+        if (status >= 200 && status < 300) resolve(value);
+        else reject(new Error('Supabase HTTP ' + status));
+      };
+      if (typeof GM_xmlhttpRequest === 'function') {
+        try {
+          GM_xmlhttpRequest({
+            method,
+            url,
+            headers,
+            data: body == null ? undefined : JSON.stringify(body),
+            timeout: 15000,
+            onload: (res) => done(res.status, res.responseText),
+            onerror: () => reject(new Error('Supabase network error')),
+            ontimeout: () => reject(new Error('Supabase timeout')),
+          });
+        } catch (e) { reject(e); }
+        return;
+      }
+      fetch(url, {
+        method,
+        headers,
+        body: body == null ? undefined : JSON.stringify(body),
+        cache: 'no-store',
+      }).then(async (res) => done(res.status, await res.text())).catch(reject);
+    });
+  }
+
+  async function ensureCloudSession() {
+    const validSession = cloudSession && cloudSession.access_token && cloudSession.user
+      && (!cloudSession.expires_at || cloudSession.expires_at > Date.now() + 60000);
+    if (validSession) return cloudSession;
+    if (cloudAuthPromise) return cloudAuthPromise;
+    const refresh = cloudSession && cloudSession.refresh_token
+      ? cloudRequest('POST', '/auth/v1/token?grant_type=refresh_token', {
+        refresh_token: cloudSession.refresh_token,
+      })
+      : cloudRequest('POST', '/auth/v1/signup', {});
+    cloudAuthPromise = refresh
+      .then((data) => {
+        if (!data || !data.access_token || !data.user) throw new Error('Supabase auth failed');
+        data.expires_at = Date.now() + (Number(data.expires_in) || 3600) * 1000;
+        cloudSession = data;
+        writeCloudCache();
+        return cloudSession;
+      })
+      .catch((error) => {
+        cloudSession = null;
+        writeCloudCache();
+        return cloudRequest('POST', '/auth/v1/signup', {})
+          .then((data) => {
+            if (!data || !data.access_token || !data.user) throw error;
+            data.expires_at = Date.now() + (Number(data.expires_in) || 3600) * 1000;
+            cloudSession = data;
+            writeCloudCache();
+            return cloudSession;
+          });
+      })
+      .finally(() => { cloudAuthPromise = null; });
+    return cloudAuthPromise;
+  }
+
+  function rebuildCloudPaints() {
+    const latest = {};
+    for (const row of Object.values(cloudRows)) {
+      const key = cleanNick(row.nick);
+      if (!key || !paintById(row.paint_id)) continue;
+      const previous = latest[key];
+      if (!previous || String(row.updated_at || '') >= String(previous.updated_at || '')) latest[key] = row;
+    }
+    cloudPaints = {};
+    for (const [nick, row] of Object.entries(latest)) cloudPaints[nick] = row.paint_id;
+  }
+
+  function applyCloudRows(rows) {
+    if (!Array.isArray(rows)) return;
+    cloudRows = {};
+    for (const row of rows) {
+      if (row && row.user_id && row.nick && paintById(row.paint_id)) cloudRows[row.user_id] = row;
+    }
+    rebuildCloudPaints();
+    writeCloudCache();
+    refresh();
+    updateSharedInfo();
+  }
+
+  function applyCloudChange(event, record, oldRecord) {
+    const row = record || oldRecord;
+    if (!row || !row.user_id) return;
+    if (event === 'DELETE') delete cloudRows[row.user_id];
+    else if (row.nick && paintById(row.paint_id)) cloudRows[row.user_id] = row;
+    rebuildCloudPaints();
+    writeCloudCache();
+    refresh();
+    updateSharedInfo();
+  }
+
+  async function loadCloudPaints() {
+    try {
+      const session = await ensureCloudSession();
+      const rows = await cloudRequest(
+        'GET',
+        '/rest/v1/guild_paints?select=user_id,nick,paint_id,updated_at',
+        null,
+        session.access_token
+      );
+      applyCloudRows(rows);
+      cloudState = 'ok';
+      updateSharedInfo();
+      connectCloudRealtime();
+    } catch (e) {
+      cloudState = 'error';
+      updateSharedInfo();
+      scheduleCloudPoll();
+    }
+  }
+
+  function scheduleCloudPoll() {
+    if (cloudPoll) return;
+    cloudPoll = window.setTimeout(() => {
+      cloudPoll = 0;
+      if (cfg.shared && !document.hidden) loadCloudPaints();
+    }, CLOUD_POLL_MS);
+  }
+
+  function connectCloudRealtime() {
+    if (cloudSocket || !cloudSession || typeof WebSocket !== 'function') return;
+    const wsUrl = SUPABASE_URL.replace(/^http/, 'ws')
+      + '/realtime/v1/websocket?apikey=' + encodeURIComponent(SUPABASE_KEY) + '&vsn=1.0.0';
+    try { cloudSocket = new WebSocket(wsUrl); } catch (e) { scheduleCloudPoll(); return; }
+    cloudSocket.addEventListener('open', () => {
+      cloudState = 'ok';
+      cloudSocket.send(JSON.stringify({
+        topic: 'realtime:public:guild_paints',
+        event: 'phx_join',
+        payload: {
+          access_token: cloudSession.access_token,
+          config: { postgres_changes: [{ event: '*', schema: 'public', table: 'guild_paints' }] },
+        },
+        ref: '1',
+      }));
+      updateSharedInfo();
+    });
+    cloudSocket.addEventListener('message', (event) => {
+      const message = readJson(event.data);
+      if (!message) return;
+      if (message.event === 'postgres_changes') {
+        const payload = message.payload || {};
+        const change = payload.data || {};
+        const data = change.data && typeof change.data === 'object' ? change.data : change;
+        applyCloudChange(data.type || data.event, data.record, data.old_record);
+      } else if (message.event === 'phx_error' || message.event === 'phx_close') {
+        scheduleCloudPoll();
+      }
+    });
+    cloudSocket.addEventListener('close', () => {
+      if (cloudHeartbeat) window.clearInterval(cloudHeartbeat);
+      cloudHeartbeat = 0;
+      cloudSocket = null;
+      scheduleCloudPoll();
+    });
+    cloudSocket.addEventListener('error', () => { scheduleCloudPoll(); });
+    if (!cloudHeartbeat) {
+      cloudHeartbeat = window.setInterval(() => {
+        if (cloudSocket && cloudSocket.readyState === WebSocket.OPEN) {
+          cloudSocket.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: String(Date.now()) }));
+        }
+      }, 25000);
+    }
+  }
+
+  async function publishOwnPaint() {
+    if (TEST || !cfg.nick || !cfg.shared) return;
+    try {
+      const session = await ensureCloudSession();
+      await cloudRequest(
+        'POST',
+        '/rest/v1/guild_paints?on_conflict=user_id',
+        { user_id: session.user.id, nick: cfg.nick, paint_id: cfg.paint, updated_at: new Date().toISOString() },
+        session.access_token
+      );
+      cloudState = 'ok';
+      loadCloudPaints();
+    } catch (e) {
+      cloudState = 'error';
+      updateSharedInfo();
+    }
+  }
+
+  function scheduleCloudPublish() {
+    if (cloudPublishTimer) window.clearTimeout(cloudPublishTimer);
+    cloudPublishTimer = window.setTimeout(() => {
+      cloudPublishTimer = 0;
+      publishOwnPaint();
+    }, 250);
+  }
+
   /* ---------- text helpers ---------- */
 
   const JUNK = /[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/g;
@@ -232,7 +481,7 @@
       if (c) set.add(c);
     }
     if (cfg.shared) {
-      for (const key of Object.keys(sharedPaints)) set.add(key);
+      for (const key of Object.keys(allSharedPaints())) set.add(key);
     }
     return set;
   }
@@ -435,14 +684,16 @@
     const set = nickSet();
 
     document.querySelectorAll('.fds-name').forEach((el) => {
-      if (!matchesText(elementText(el), set)) {
+      if (!matchesText(elementText(el), set) || !paintForNick(elementText(el))) {
         el.classList.remove('fds-name');
         decorate(el, null);
       }
     });
 
     const mark = (el) => {
-      decorate(el, paintForNick(elementText(el)));
+      const paint = paintForNick(elementText(el));
+      if (!paint) return;
+      decorate(el, paint);
       if (el.classList.contains('fds-name')) return;
       el.style.setProperty('--fds-delay', phaseDelay());
       el.classList.add('fds-name');
@@ -885,6 +1136,7 @@
         saveCfg();
         refresh();
         syncPanel();
+        scheduleCloudPublish();
       }
     });
 
@@ -930,6 +1182,7 @@
       refresh();
       if (cfg.shared) {
         loadShared(false);
+        scheduleCloudPublish();
       } else {
         sharedState = 'off';
         updateSharedInfo();
@@ -947,6 +1200,7 @@
       saveCfg();
       refresh();
       syncNickUi();
+      scheduleCloudPublish();
     });
     nick.addEventListener('blur', () => {
       cfg.nick = nick.value.trim();
@@ -954,6 +1208,7 @@
       saveCfg();
       refresh();
       syncNickUi();
+      scheduleCloudPublish();
     });
 
     shadow.getElementById('fdsPickMe').addEventListener('click', () => {
@@ -970,6 +1225,7 @@
       nick.value = found;
       refresh();
       syncNickUi();
+      scheduleCloudPublish();
     });
 
     const aliases = shadow.getElementById('fdsAliases');
@@ -988,6 +1244,7 @@
       applyVars();
       refresh();
       syncPanel();
+      scheduleCloudPublish();
     });
   }
 
@@ -1018,17 +1275,17 @@
     if (!shadow) return;
     const el = shadow.getElementById('fdsSharedInfo');
     if (!el) return;
-    const count = Object.keys(sharedPaints).length;
+    const count = Object.keys(allSharedPaints()).length;
     el.classList.remove('ok', 'warn');
     if (!cfg.shared) {
       el.textContent = 'Общий список выключен';
       return;
     }
-    if (sharedState === 'loading') {
+    if (sharedState === 'loading' || cloudState === 'loading') {
       el.textContent = 'Общий список: загружаю…';
       return;
     }
-    if (sharedState === 'error') {
+    if (sharedState === 'error' && !count) {
       el.textContent = count
         ? 'Общий список: ' + count + ' ' + plural(count, 'ник', 'ника', 'ников') + ' (из кэша, нет связи)'
         : 'Общий список не загрузился';
@@ -1037,7 +1294,7 @@
     }
     if (count) {
       el.textContent = 'Общий список: ' + count + ' ' + plural(count, 'ник', 'ника', 'ников');
-      el.classList.add('ok');
+      el.classList.add(cloudState === 'error' ? 'warn' : 'ok');
     } else {
       el.textContent = 'Общий список пуст';
     }
@@ -1105,6 +1362,7 @@
   const start = () => {
     const firstRun = !cfg.asked;
     readSharedCache();
+    readCloudCache();
     if (!cfg.nick) {
       const found = detectOwnNick();
       if (found) {
@@ -1114,6 +1372,12 @@
     }
     refresh();
     loadShared(false);
+    if (!TEST && cfg.shared) {
+      cloudState = 'loading';
+      updateSharedInfo();
+      loadCloudPaints();
+      scheduleCloudPublish();
+    }
     if (firstRun || !cfg.nick) {
       if (firstRun) {
         cfg.asked = true;
@@ -1124,6 +1388,9 @@
       showBubble();
     }
     setInterval(() => { if (!document.hidden && cfg.enabled) scan(); }, 2500);
+    cloudSyncInterval = window.setInterval(() => {
+      if (cfg.shared && !document.hidden) loadCloudPaints();
+    }, CLOUD_POLL_MS);
     const mo = new MutationObserver(schedule);
     mo.observe(document.documentElement, {
       childList: true,
