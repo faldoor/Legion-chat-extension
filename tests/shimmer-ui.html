@@ -4,7 +4,7 @@
 <body>
 <ul class="cy-chat"><ol class="cy-chat-l">
   <li><b data-nick="faldoorch">faldoorch</b> <span>тест</span></li>
-  <li><b data-nick="pupok309">pupok309</b> <span>привет @faldoorch</span></li>
+  <li data-nick="pupok309"><b data-nick="pupok309">pupok309</b> <span>привет @faldoorch</span></li>
 </ol></ul>
 <pre id="out"></pre>
 <script>
@@ -26,6 +26,8 @@ setTimeout(() => {
     const shadow = document.getElementById('fds-host').shadowRoot;
     ok('loot window exists', !!shadow.getElementById('fdsLootWindow'));
     ok('menu uses legionnaire helmet SVG', !!shadow.querySelector('.bubble .bicon svg .helmet-crest'));
+    const latestChat = document.querySelector('ol.cy-chat-l > li:last-child');
+    ok('latest chat message remains intact', latestChat.textContent.includes('@faldoorch') && !latestChat.querySelector('[data-fds-mention]') && !latestChat.classList.contains('fds-name'));
     model.loot.setState({
       round: { id: 'active', item_name: 'Тестовый меч', rarity: 'эпическая', status: 'active', ends_at: new Date(Date.now() + 120000).toISOString() },
       rolls: [{ id: 'r1', round_id: 'active', user_id: 'other', nick: 'pupok309', roll: 87 }],

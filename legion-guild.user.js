@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Легион - Гильдейское расширение
 // @namespace    https://legiongame.gg/
-// @version      1.9.2
+// @version      1.9.3
 // @description  Гильдейское расширение для чата Легиона: переливание ника, общий список гильдии и безопасное распределение лута.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
 // @connect      xqwdpnpvfxvzmtmmupev.supabase.co
-// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.2/legion-guild.user.js
-// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.2/legion-guild.user.js
+// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.3/legion-guild.user.js
+// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.3/legion-guild.user.js
 // ==/UserScript==
 
 (function () {
@@ -696,8 +696,14 @@
     return new RegExp('(^|[^\\p{L}\\p{N}_@])@(' + list.join('|') + ')(?![\\p{L}\\p{N}_])', 'giu');
   }
 
+  function isLiveChatItem(el) {
+    const item = el && el.closest ? el.closest('ol.cy-chat-l > li') : null;
+    return !!(item && item.parentElement && item === item.parentElement.lastElementChild);
+  }
+
   function unwrapMentions() {
     document.querySelectorAll('[data-fds-mention]').forEach((el) => {
+      if (isLiveChatItem(el)) return;
       const parent = el.parentNode;
       if (!parent) return;
       parent.replaceChild(document.createTextNode(el.textContent || ''), el);
@@ -711,6 +717,10 @@
     if (!re) return;
 
     document.querySelectorAll('ol.cy-chat-l > li > span').forEach((body) => {
+      // The chat renderer is still writing the newest item. Do not replace its
+      // text nodes while it is live; the next scan will process it after a new
+      // message arrives and this avoids losing the newest message.
+      if (isLiveChatItem(body)) return;
       if (body.closest('.fds-name')) return;
       const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
       const nodes = [];
@@ -860,6 +870,7 @@
 
     const base = 'b[data-nick], [data-nick]';
     document.querySelectorAll(base).forEach((el) => {
+      if (isLiveChatItem(el)) return;
       if (matchesText(elementText(el), set)) mark(el);
     });
 
