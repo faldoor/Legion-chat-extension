@@ -33,7 +33,7 @@
   const SUPABASE_URL = 'https://xqwdpnpvfxvzmtmmupev.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_qK3o1yioybygYWo3R-BQvA_ks7maFKn';
   const SUPABASE_AUTH_KEY = 'fds_supabase_auth_v1';
-  const CLOUD_POLL_MS = 30000;
+  const CLOUD_POLL_MS = 5000;
 
   const PAINTS = [
     { id: 'aurora',  name: 'Аврора',     glow: '124,140,255', colors: ['#6ef3ff', '#7c8cff', '#d16bff', '#ff8ad8'] },
@@ -413,7 +413,11 @@
         const payload = message.payload || {};
         const change = payload.data || {};
         const data = change.data && typeof change.data === 'object' ? change.data : change;
-        applyCloudChange(data.type || data.event, data.record, data.old_record);
+        applyCloudChange(
+          data.eventType || data.type || data.event,
+          data.new || data.record,
+          data.old || data.old_record
+        );
       } else if (message.event === 'phx_error' || message.event === 'phx_close') {
         scheduleCloudPoll();
       }
