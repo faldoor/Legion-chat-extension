@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Легион - Гильдийское расширение
 // @namespace    https://legiongame.gg/
-// @version      1.8.1
-// @description  Гильдийское расширение для чата Легиона: красивое анимированное переливание ника, общий список гильдии, настройки у каждого в браузере.
+// @version      1.9.0
+// @description  Гильдийское расширение для чата Легиона: переливание ника, общий список гильдии и безопасное распределение лута.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
 // @match        https://play.multidonate.ru/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
 // @connect      xqwdpnpvfxvzmtmmupev.supabase.co
-// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.8.1/legion-guild.user.js
-// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.8.1/legion-guild.user.js
+// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.0/legion-guild.user.js
+// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.0/legion-guild.user.js
 // ==/UserScript==
 
 (function () {
@@ -33,7 +33,10 @@
   const SUPABASE_URL = 'https://xqwdpnpvfxvzmtmmupev.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_qK3o1yioybygYWo3R-BQvA_ks7maFKn';
   const SUPABASE_AUTH_KEY = 'fds_supabase_auth_v1';
+  const LOOT_OWNER_KEY = 'fds_loot_owner_v1';
+  const LOOT_FUNCTION_PATH = '/functions/v1/loot';
   const CLOUD_POLL_MS = 5000;
+  const LOOT_RARITIES = ['серая', 'необычная', 'редкая', 'эпическая', 'легендарная', 'мифическая'];
 
   const PAINTS = [
     { id: 'aurora',  name: 'Аврора',     glow: '124,140,255', colors: ['#6ef3ff', '#7c8cff', '#d16bff', '#ff8ad8'] },
@@ -115,6 +118,14 @@
   let cloudPoll = 0;
   let cloudPublishTimer = 0;
   let cloudSyncInterval = 0;
+
+  let lootState = { round: null, rolls: [], serverNow: '', loaded: false, error: '' };
+  let lootOwnerToken = '';
+  let lootSocket = null;
+  let lootHeartbeat = 0;
+  let lootPoll = 0;
+  let lootTimer = 0;
+  let lootAnnouncementId = '';
 
   function paintById(id) {
     return PAINTS.find((p) => p.id === id) || null;
@@ -454,6 +465,196 @@
       cloudState = 'error';
       updateSharedInfo();
     }
+  }
+
+  /* ---------- loot roll sync ---------- */
+
+  function readLootOwnerToken() {
+    let raw = '';
+    try { if (typeof GM_getValue === 'function') raw = GM_getValue(LOOT_OWNER_KEY, ''); } catch (e) { raw = ''; }
+    if (!raw) {
+      try { raw = localStorage.getItem(LOOT_OWNER_KEY) || ''; } catch (e) { raw = ''; }
+    }
+    const cached = readJson(raw);
+    if (cached && cached.token && (!cached.expires_at || Date.parse(cached.expires_at) > Date.now() + 60000)) lootOwnerToken = cached.token;
+  }
+
+  function writeLootOwnerToken(token, expiresAt) {
+    lootOwnerToken = token || '';
+    const raw = JSON.stringify({ token: lootOwnerToken, expires_at: expiresAt || '' });
+    try { if (typeof GM_setValue === 'function') GM_setValue(LOOT_OWNER_KEY, raw); } catch (e) { /* ignore */ }
+    try { localStorage.setItem(LOOT_OWNER_KEY, raw); } catch (e) { /* ignore */ }
+    renderLootPanel();
+  }
+
+  async function lootRequest(method, path, body, owner) {
+    if (owner) return cloudRequest(method, LOOT_FUNCTION_PATH + path, body, lootOwnerToken);
+    const session = await ensureCloudSession();
+    return cloudRequest(method, LOOT_FUNCTION_PATH + path, body, session.access_token);
+  }
+
+  function applyLootState(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    lootState = {
+      round: payload.round || null,
+      rolls: Array.isArray(payload.rolls) ? payload.rolls : [],
+      serverNow: payload.server_now || new Date().toISOString(),
+      loaded: true,
+      error: '',
+    };
+    renderLootPanel();
+  }
+
+  async function loadLootState() {
+    if (TEST) return;
+    try {
+      applyLootState(await lootRequest('GET', '/loot/state'));
+      connectLootRealtime();
+    } catch (e) {
+      lootState.error = 'Не удалось загрузить состояние разролла';
+      lootState.loaded = true;
+      renderLootPanel();
+      scheduleLootPoll();
+    }
+  }
+
+  function scheduleLootPoll() {
+    if (lootPoll) return;
+    lootPoll = window.setTimeout(() => {
+      lootPoll = 0;
+      if (!document.hidden) loadLootState();
+    }, CLOUD_POLL_MS);
+  }
+
+  function connectLootRealtime() {
+    if (lootSocket || !cloudSession || typeof WebSocket !== 'function') return;
+    const wsUrl = SUPABASE_URL.replace(/^http/, 'ws')
+      + '/realtime/v1/websocket?apikey=' + encodeURIComponent(SUPABASE_KEY) + '&vsn=1.0.0';
+    try { lootSocket = new WebSocket(wsUrl); } catch (e) { scheduleLootPoll(); return; }
+    lootSocket.addEventListener('open', () => {
+      const join = (table, ref) => lootSocket.send(JSON.stringify({
+        topic: 'realtime:public:' + table,
+        event: 'phx_join',
+        payload: {
+          access_token: cloudSession.access_token,
+          config: { postgres_changes: [{ event: '*', schema: 'public', table }] },
+        },
+        ref,
+      }));
+      join('loot_rounds', 'loot-rounds');
+      join('loot_rolls', 'loot-rolls');
+    });
+    lootSocket.addEventListener('message', (event) => {
+      const message = readJson(event.data);
+      if (message && message.event === 'postgres_changes') loadLootState();
+      else if (message && (message.event === 'phx_error' || message.event === 'phx_close')) scheduleLootPoll();
+    });
+    lootSocket.addEventListener('close', () => {
+      lootSocket = null;
+      if (lootHeartbeat) window.clearInterval(lootHeartbeat);
+      lootHeartbeat = 0;
+      scheduleLootPoll();
+    });
+    lootSocket.addEventListener('error', scheduleLootPoll);
+    if (!lootHeartbeat) {
+      lootHeartbeat = window.setInterval(() => {
+        if (lootSocket && lootSocket.readyState === WebSocket.OPEN) {
+          lootSocket.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: String(Date.now()) }));
+        }
+      }, 25000);
+    }
+  }
+
+  async function processLootOAuthCallback() {
+    const query = new URLSearchParams(location.search);
+    const code = query.get('owner_code');
+    const oauthError = query.get('loot_error');
+    if (!code && !oauthError) return;
+    history.replaceState(null, '', location.pathname + location.hash);
+    if (oauthError) {
+      lootState.error = 'Вход владельца не выполнен: ' + oauthError;
+      return;
+    }
+    try {
+      const data = await cloudRequest('POST', LOOT_FUNCTION_PATH + '/owner/exchange', { code });
+      writeLootOwnerToken(data.owner_token, data.expires_at);
+      await loadLootState();
+    } catch (e) {
+      lootState.error = 'Не удалось завершить вход владельца';
+    }
+  }
+
+  async function startLootOwnerLogin() {
+    try {
+      const data = await cloudRequest('GET', LOOT_FUNCTION_PATH + '/twitch/start');
+      if (!data || !data.authorize_url) throw new Error('OAuth URL missing');
+      location.href = data.authorize_url;
+    } catch (e) {
+      lootState.error = 'Не удалось начать вход Twitch';
+      renderLootPanel();
+    }
+  }
+
+  async function createLootRound() {
+    if (!lootOwnerToken || !shadow) return;
+    const itemName = shadow.getElementById('fdsLootItem').value.trim();
+    const rarity = shadow.getElementById('fdsLootRarity').value;
+    const duration = Number(shadow.getElementById('fdsLootDuration').value);
+    try {
+      applyLootState(await lootRequest('POST', '/loot/round', {
+        item_name: itemName,
+        rarity,
+        duration_seconds: duration,
+      }, true));
+      shadow.getElementById('fdsLootItem').value = '';
+    } catch (e) {
+      lootState.error = 'Не удалось создать разролл. Проверьте поля.';
+      renderLootPanel();
+    }
+  }
+
+  async function finishLootRound() {
+    if (!lootOwnerToken) return;
+    try { await lootRequest('POST', '/loot/round/finish', {}, true); await loadLootState(); }
+    catch (e) { lootState.error = 'Не удалось завершить разролл'; renderLootPanel(); }
+  }
+
+  async function clearLootRolls() {
+    if (!lootOwnerToken) return;
+    try { await lootRequest('POST', '/loot/clear', {}, true); await loadLootState(); }
+    catch (e) { lootState.error = 'Не удалось очистить журнал'; renderLootPanel(); }
+  }
+
+  async function rollLoot() {
+    const round = lootState.round;
+    if (!round || !isLootRoundActive(round)) return;
+    const button = shadow && shadow.getElementById('fdsLootRoll');
+    if (button) button.disabled = true;
+    try {
+      const data = await lootRequest('POST', '/loot/roll', { round_id: round.id, nick: cfg.nick || PLACEHOLDER });
+      if (data && data.roll) lootState.rolls = [data.roll, ...lootState.rolls.filter((row) => row.id !== data.roll.id)];
+      lootState.error = '';
+      renderLootPanel();
+    } catch (e) {
+      lootState.error = 'Ролл не принят: возможно, ты уже бросал или время истекло.';
+      renderLootPanel();
+      loadLootState();
+    }
+  }
+
+  function lootServerOffset() {
+    const serverTime = Date.parse(lootState.serverNow || '');
+    return Number.isFinite(serverTime) ? serverTime - Date.now() : 0;
+  }
+
+  function isLootRoundActive(round) {
+    return !!round && round.status === 'active' && Date.parse(round.ends_at) > Date.now() + lootServerOffset();
+  }
+
+  function lootTimeLeft(round) {
+    const seconds = Math.max(0, Math.ceil((Date.parse(round.ends_at) - Date.now() - lootServerOffset()) / 1000));
+    const minutes = Math.floor(seconds / 60);
+    return minutes + ':' + String(seconds % 60).padStart(2, '0');
   }
 
   function scheduleCloudPublish() {
@@ -887,6 +1088,39 @@
     .btn.primary:hover { filter: brightness(1.06); }
     .hint { margin-top: 10px; font-size: 10.5px; line-height: 1.5; color: #7d7599; text-align: center; }
 
+    .loot-launch { width: 100%; margin-top: 12px; }
+    .loot-window { margin-top: 4px; }
+    .loot-card {
+      padding: 13px; border-radius: 13px; background:
+        radial-gradient(120% 140% at 50% 0%, rgba(255, 190, 92, .16), transparent 60%), #0d0a17;
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .loot-kicker { color: #a99ec8; font-size: 10px; letter-spacing: .8px; text-transform: uppercase; }
+    .loot-item { margin-top: 4px; color: #fff; font-size: 19px; font-weight: 800; overflow-wrap: anywhere; }
+    .loot-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+    .loot-rarity { display: inline-flex; align-items: center; gap: 5px; color: #ffd166; font-weight: 700; }
+    .loot-rarity::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px currentColor; }
+    .loot-timer { color: #fff; font: 800 17px/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .loot-timer.done { color: #ff9eb8; }
+    .loot-announcement { margin-top: 10px; padding: 9px 10px; border-radius: 9px; color: #f1eaff; background: rgba(124,92,255,.13); border: 1px solid rgba(180,139,255,.2); font-size: 11.5px; line-height: 1.45; }
+    .loot-roll { width: 100%; margin-top: 12px; padding: 13px 14px; border: 0; border-radius: 11px; color: #1b1028; background: linear-gradient(135deg, #ffd166, #ff9ede); box-shadow: 0 9px 24px rgba(255, 172, 100, .23); font: inherit; font-size: 16px; font-weight: 850; cursor: pointer; }
+    .loot-roll:hover { filter: brightness(1.06); }
+    .loot-roll:disabled { opacity: .52; cursor: not-allowed; filter: none; }
+    .loot-empty { padding: 20px 8px; color: #aaa0c4; text-align: center; line-height: 1.55; }
+    .loot-journal { display: grid; gap: 5px; margin-top: 13px; max-height: 180px; overflow: auto; }
+    .loot-roll-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; background: rgba(255,255,255,.045); }
+    .loot-roll-row .loot-nick { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ddd6f2; }
+    .loot-roll-row .loot-value { color: #ffd166; font: 800 14px/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .loot-owner { display: grid; gap: 8px; margin-top: 13px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.07); }
+    .loot-owner-title { color: #cfc3ef; font-size: 11px; font-weight: 750; letter-spacing: .4px; }
+    .loot-owner-actions { display: flex; gap: 6px; }
+    .loot-owner-actions .mini { flex: 1; min-height: 30px; }
+    .loot-owner-login { width: 100%; }
+    .loot-error { margin-top: 8px; color: #ffb4c8; font-size: 11px; line-height: 1.4; }
+    .loot-back { margin-top: 12px; }
+    .rarity-grey { color: #b8b8c4; } .rarity-unusual { color: #6ee7a1; } .rarity-rare { color: #69a7ff; }
+    .rarity-epic { color: #c78bff; } .rarity-legendary { color: #ffad5c; } .rarity-mythic { color: #ff6b9d; }
+
     .bubble {
       position: fixed; right: 16px; top: 16px; z-index: 2147483000;
       width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%;
@@ -952,6 +1186,7 @@
 
   let host = null;
   let shadow = null;
+  let lootOpen = false;
 
   const BUBBLE_SIZE = 56;
 
@@ -1040,6 +1275,81 @@
     handle.addEventListener('pointercancel', end);
   }
 
+  function lootRarityClass(rarity) {
+    return {
+      серая: 'rarity-grey', необычная: 'rarity-unusual', редкая: 'rarity-rare',
+      эпическая: 'rarity-epic', легендарная: 'rarity-legendary', мифическая: 'rarity-mythic',
+    }[rarity] || '';
+  }
+
+  function isOwnLootRoll(round) {
+    const userId = cloudSession && cloudSession.user && cloudSession.user.id;
+    return !!userId && lootState.rolls.some((row) => row.round_id === round.id && row.user_id === userId);
+  }
+
+  function lootAnnouncement(round) {
+    if (!round) return '';
+    return 'ВНИМАНИЕ ЛЕГИОН! На разролле предмет «' + round.item_name + '», редкость: ' + round.rarity + '. Кидайте свой ролл на удачу.';
+  }
+
+  function renderLootPanel() {
+    if (!shadow) return;
+    const windowEl = shadow.getElementById('fdsLootWindow');
+    if (!windowEl) return;
+    const round = lootState.round;
+    const owner = !!lootOwnerToken;
+    const empty = !round;
+    windowEl.hidden = !lootOpen;
+    shadow.getElementById('fdsMainWindow').hidden = lootOpen;
+    shadow.getElementById('fdsLootOwner').hidden = !owner || empty;
+    shadow.getElementById('fdsLootLogin').hidden = owner;
+    shadow.getElementById('fdsLootError').textContent = lootState.error || '';
+    shadow.getElementById('fdsLootError').hidden = !lootState.error;
+    if (empty) {
+      shadow.getElementById('fdsLootBody').innerHTML = '<div class="loot-empty">Сейчас нет активного разролла.<br>Когда владелец создаст предмет, он появится здесь у всех участников.</div>';
+      shadow.getElementById('fdsLootOwner').hidden = !owner;
+      return;
+    }
+    const active = isLootRoundActive(round);
+    const ownRoll = isOwnLootRoll(round);
+    const rarityClass = lootRarityClass(round.rarity);
+    const rows = lootState.rolls.map((row) =>
+      '<div class="loot-roll-row"><span class="loot-nick">' + escapeHtml(row.nick) + '</span><span class="loot-value">' + Number(row.roll) + '</span></div>'
+    ).join('');
+    shadow.getElementById('fdsLootBody').innerHTML =
+      '<div class="loot-card">' +
+        '<div class="loot-kicker">' + (active ? 'Текущий предмет' : 'Разролл завершён') + '</div>' +
+        '<div class="loot-item">' + escapeHtml(round.item_name) + '</div>' +
+        '<div class="loot-meta"><span class="loot-rarity ' + rarityClass + '">' + escapeHtml(round.rarity) + '</span>' +
+          '<span class="loot-timer ' + (active ? '' : 'done') + '">' + (active ? lootTimeLeft(round) : 'завершён') + '</span></div>' +
+        '<div class="loot-announcement">' + escapeHtml(lootAnnouncement(round)) + '</div>' +
+        '<button class="loot-roll" type="button" id="fdsLootRoll" ' + ((!active || ownRoll) ? 'disabled' : '') + '>' + (ownRoll ? 'Ты уже роллил: ' + Number(lootState.rolls.find((row) => row.user_id === cloudSession.user.id && row.round_id === round.id).roll) : (active ? 'Роллить' : 'Время истекло')) + '</button>' +
+      '</div>' +
+      '<div class="sec"><div class="sec-h"><span class="sec-t">Журнал роллов</span><span class="val">' + lootState.rolls.length + '</span></div>' +
+        '<div class="loot-journal">' + (rows || '<div class="hint2">Пока никто не роллил.</div>') + '</div></div>';
+    const rollButton = shadow.getElementById('fdsLootRoll');
+    if (rollButton) rollButton.addEventListener('click', rollLoot);
+    if (round.id !== lootAnnouncementId) {
+      lootAnnouncementId = round.id;
+      shadow.getElementById('fdsLootNotice').textContent = lootAnnouncement(round);
+      shadow.getElementById('fdsLootNotice').hidden = false;
+    }
+    shadow.getElementById('fdsLootOwner').hidden = !owner;
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  }
+
+  function syncLootTimer() {
+    if (!lootOpen || !lootState.round || !shadow) return;
+    const active = isLootRoundActive(lootState.round);
+    const timer = shadow.querySelector('.loot-timer');
+    if (!timer) return;
+    const next = active ? lootTimeLeft(lootState.round) : 'завершён';
+    if (timer.textContent !== next) renderLootPanel();
+  }
+
   function buildPanel() {
     if (host) return;
     host = document.createElement('div');
@@ -1056,6 +1366,7 @@
           <button class="x" type="button" data-close aria-label="Свернуть в кружок" title="Свернуть в кружок">✕</button>
         </div>
 
+          <div id="fdsMainWindow">
           <div class="setup" id="fdsSetup">
             <b>Сначала впиши свой ник</b>
             <span>Переливка включается только для указанного ника и работает у каждого в его браузере.</span>
@@ -1105,7 +1416,28 @@
             <button class="btn" type="button" id="fdsReset">Сбросить</button>
             <button class="btn primary" type="button" data-close>Готово</button>
           </div>
+          <button class="btn loot-launch" type="button" id="fdsLootOpen">🎲 Распределение лута</button>
           <div class="hint">Работает только у тебя в браузере · Alt+Shift+F</div>
+          </div>
+
+          <div class="loot-window" id="fdsLootWindow" hidden>
+            <div class="sec-h"><span class="sec-t">Распределение лута</span><span class="val">общий раунд</span></div>
+            <div class="loot-announcement" id="fdsLootNotice" hidden></div>
+            <div id="fdsLootBody"><div class="loot-empty">Загружаю состояние разролла…</div></div>
+            <div class="loot-owner" id="fdsLootLogin">
+              <div class="loot-owner-title">Управление владельца</div>
+              <button class="mini loot-owner-login" type="button" id="fdsLootLoginBtn">Войти через Twitch</button>
+            </div>
+            <div class="loot-owner" id="fdsLootOwner" hidden>
+              <div class="loot-owner-title">Новый предмет</div>
+              <div class="field"><span>Название</span><input id="fdsLootItem" type="text" maxlength="160" placeholder="Название предмета"></div>
+              <div class="field"><span>Редкость</span><select id="fdsLootRarity">${LOOT_RARITIES.map((rarity) => '<option value="' + rarity + '">' + rarity + '</option>').join('')}</select></div>
+              <div class="field"><span>Таймер, секунд</span><input id="fdsLootDuration" type="number" min="10" max="86400" step="1" value="120"></div>
+              <div class="loot-owner-actions"><button class="mini" type="button" id="fdsLootCreate">Создать</button><button class="mini" type="button" id="fdsLootFinish">Завершить</button><button class="mini" type="button" id="fdsLootClear">Очистить журнал</button></div>
+            </div>
+            <div class="loot-error" id="fdsLootError" hidden></div>
+            <button class="btn loot-back" type="button" id="fdsLootBack">← К настройкам</button>
+          </div>
         </section>
       <button class="bubble" type="button" hidden aria-label="Открыть настройки переливания" title="Переливание ника · настройки">
         <span class="halo"></span>
@@ -1250,6 +1582,21 @@
       syncPanel();
       scheduleCloudPublish();
     });
+
+    shadow.getElementById('fdsLootOpen').addEventListener('click', () => {
+      lootOpen = true;
+      renderLootPanel();
+      if (!lootState.loaded) loadLootState();
+    });
+    shadow.getElementById('fdsLootBack').addEventListener('click', () => {
+      lootOpen = false;
+      renderLootPanel();
+    });
+    shadow.getElementById('fdsLootLoginBtn').addEventListener('click', startLootOwnerLogin);
+    shadow.getElementById('fdsLootCreate').addEventListener('click', createLootRound);
+    shadow.getElementById('fdsLootFinish').addEventListener('click', finishLootRound);
+    shadow.getElementById('fdsLootClear').addEventListener('click', clearLootRolls);
+    renderLootPanel();
   }
 
   function syncNickUi() {
@@ -1326,6 +1673,7 @@
     shadow.getElementById('fdsPv').classList.toggle('no-shine', !cfg.shine);
     syncBubble();
     updateSharedInfo();
+    renderLootPanel();
   }
 
   function openPanel() {
@@ -1367,6 +1715,8 @@
     const firstRun = !cfg.asked;
     readSharedCache();
     readCloudCache();
+    readLootOwnerToken();
+    processLootOAuthCallback();
     if (!cfg.nick) {
       const found = detectOwnNick();
       if (found) {
@@ -1382,6 +1732,7 @@
       loadCloudPaints();
       scheduleCloudPublish();
     }
+    if (!TEST) loadLootState();
     if (firstRun || !cfg.nick) {
       if (firstRun) {
         cfg.asked = true;
@@ -1395,6 +1746,7 @@
     cloudSyncInterval = window.setInterval(() => {
       if (cfg.shared && !document.hidden) loadCloudPaints();
     }, CLOUD_POLL_MS);
+    lootTimer = window.setInterval(syncLootTimer, 1000);
     const mo = new MutationObserver(schedule);
     mo.observe(document.documentElement, {
       childList: true,
@@ -1449,5 +1801,11 @@
     applyVars,
     paints: PAINTS,
     PAINTS,
+    loot: {
+      setState: (payload) => applyLootState(payload),
+      open: () => { lootOpen = true; renderLootPanel(); },
+      close: () => { lootOpen = false; renderLootPanel(); },
+      state: () => lootState,
+    },
   };
 })();

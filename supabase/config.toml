@@ -1,0 +1,2 @@
+[functions.loot]
+verify_jwt = false

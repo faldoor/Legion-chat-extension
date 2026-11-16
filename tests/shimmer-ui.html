@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Legion userscript UI tests</title></head>
+<body>
+<ul class="cy-chat"><ol class="cy-chat-l">
+  <li><b data-nick="faldoorch">faldoorch</b> <span>тест</span></li>
+  <li><b data-nick="pupok309">pupok309</b> <span>привет @faldoorch</span></li>
+</ol></ul>
+<pre id="out"></pre>
+<script>
+  const mem = {};
+  window.GM_getValue = (key, fallback) => (key in mem ? mem[key] : fallback);
+  window.GM_setValue = (key, value) => { mem[key] = value; };
+  window.GM_registerMenuCommand = () => {};
+  window.__FDS_TEST__ = true;
+  mem.fds_cfg_v1 = JSON.stringify({ shared: false });
+</script>
+<script src="../legion-guild.user.js"></script>
+<script>
+setTimeout(() => {
+  const rows = [];
+  const ok = (name, condition) => rows.push((condition ? 'OK   ' : 'FAIL ') + name);
+  try {
+    const model = window.FaldoorchShimmer;
+    model.open();
+    const shadow = document.getElementById('fds-host').shadowRoot;
+    ok('loot window exists', !!shadow.getElementById('fdsLootWindow'));
+    model.loot.setState({
+      round: { id: 'active', item_name: 'Тестовый меч', rarity: 'эпическая', status: 'active', ends_at: new Date(Date.now() + 120000).toISOString() },
+      rolls: [{ id: 'r1', round_id: 'active', user_id: 'other', nick: 'pupok309', roll: 87 }],
+      server_now: new Date().toISOString(),
+    });
+    model.loot.open();
+    ok('item and rarity render', shadow.getElementById('fdsLootBody').textContent.includes('Тестовый меч') && shadow.getElementById('fdsLootBody').textContent.includes('эпическая'));
+    ok('announcement stays in UI', shadow.getElementById('fdsLootBody').textContent.includes('ВНИМАНИЕ ЛЕГИОН!'));
+    ok('journal renders roll', shadow.querySelector('.loot-journal').textContent.includes('87'));
+    ok('participant cannot see owner controls', shadow.getElementById('fdsLootOwner').hidden && !shadow.getElementById('fdsLootLogin').hidden);
+    model.loot.setState({
+      round: { id: 'expired', item_name: 'Старый предмет', rarity: 'серая', status: 'active', ends_at: new Date(Date.now() - 1000).toISOString() },
+      rolls: [], server_now: new Date().toISOString(),
+    });
+    ok('expired round disables roll', shadow.getElementById('fdsLootRoll').disabled);
+    model.loot.setState({ round: null, rolls: [], server_now: new Date().toISOString() });
+    ok('empty state renders', shadow.getElementById('fdsLootBody').textContent.includes('нет активного разролла'));
+    document.getElementById('out').textContent = rows.join('\n') + '\n\nитог: ' + rows.filter((row) => row.startsWith('OK')).length + '/' + rows.length + ' OK';
+  } catch (error) {
+    document.getElementById('out').textContent = 'ERROR: ' + error.message + '\n' + error.stack;
+  }
+}, 500);
+</script>
+</body>
+</html>
