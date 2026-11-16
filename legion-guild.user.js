@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
 // @connect      xqwdpnpvfxvzmtmmupev.supabase.co
-// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/heads/main/legion-guild.user.js
-// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/heads/main/legion-guild.user.js
+// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.8.1/legion-guild.user.js
+// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.8.1/legion-guild.user.js
 // ==/UserScript==
 
 (function () {
