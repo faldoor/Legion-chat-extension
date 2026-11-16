@@ -662,8 +662,8 @@
     @keyframes fds-spin { to { transform: rotate(360deg); } }
 
     @keyframes fds-flow {
-      0%   { background-position: -120% 50%, 0% 50%; }
-      100% { background-position: 220% 50%, 200% 50%; }
+      0%   { background-position: -183.333% 50%, 0% 50%; }
+      100% { background-position: 283.333% 50%, 200% 50%; }
     }
     @keyframes fds-flow-plain {
       0%   { background-position: 0% 50%; }
