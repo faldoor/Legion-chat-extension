@@ -23,28 +23,6 @@ create table if not exists public.loot_rolls (
   unique (round_id, user_id)
 );
 
-create table if not exists public.loot_oauth_states (
-  state_hash text primary key,
-  callback_url text not null,
-  expires_at timestamptz not null,
-  created_at timestamptz not null default now()
-);
-
-create table if not exists public.loot_owner_codes (
-  code_hash text primary key,
-  twitch_user_id text not null,
-  expires_at timestamptz not null,
-  used_at timestamptz,
-  created_at timestamptz not null default now()
-);
-
-create table if not exists public.loot_owner_sessions (
-  token_hash text primary key,
-  twitch_user_id text not null,
-  expires_at timestamptz not null,
-  created_at timestamptz not null default now()
-);
-
 create or replace function public.claim_loot_roll(
   p_round_id uuid,
   p_user_id uuid,
@@ -90,17 +68,9 @@ grant execute on function public.claim_loot_roll(uuid, uuid, text, integer) to s
 
 alter table public.loot_rounds enable row level security;
 alter table public.loot_rolls enable row level security;
-alter table public.loot_oauth_states enable row level security;
-alter table public.loot_owner_codes enable row level security;
-alter table public.loot_owner_sessions enable row level security;
-
-revoke all on public.loot_rounds, public.loot_rolls,
-  public.loot_oauth_states, public.loot_owner_codes, public.loot_owner_sessions
-  from anon, authenticated;
+revoke all on public.loot_rounds, public.loot_rolls from anon, authenticated;
 grant select on public.loot_rounds, public.loot_rolls to authenticated;
-grant all on public.loot_rounds, public.loot_rolls,
-  public.loot_oauth_states, public.loot_owner_codes, public.loot_owner_sessions
-  to service_role;
+grant all on public.loot_rounds, public.loot_rolls to service_role;
 
 drop policy if exists loot_rounds_read_authenticated on public.loot_rounds;
 create policy loot_rounds_read_authenticated on public.loot_rounds

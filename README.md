@@ -43,11 +43,12 @@ Userscript для чата Legion Game:
 истечения таймера новые роллы отклоняются. Анонс показывается только в UI
 userscript и не отправляется в игровой чат.
 
-Управление раундами доступно только владельцу после Twitch OAuth. Twitch secret,
-Supabase service-role key и immutable Twitch owner ID хранятся только в secrets
-Supabase; в userscript они отсутствуют. Исходник миграции и функции находится в
+Управление раундами доступно пользователю с ником `faldoorch`; сервер дополнительно
+требует действующую анонимную Supabase-сессию. Это упрощённый режим доверия к нику:
+он не заменяет криптографическую идентификацию и должен использоваться только в
+доверенном составе гильдии. Supabase service-role key не попадает в userscript.
+Исходник миграции и функции находится в
 [`supabase/`](./supabase/) и [`docs/superpowers/specs/2026-11-16-loot-roll-design.md`](./docs/superpowers/specs/2026-11-16-loot-roll-design.md).
 
 Перед production rollout необходимо применить миграцию, задеплоить функцию
-`loot` и задать secrets `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`,
-`TWITCH_OWNER_USER_ID`, `LOOT_CALLBACK_URL` и `SUPABASE_SERVICE_ROLE_KEY`.
+`loot` и задать secret `SUPABASE_SERVICE_ROLE_KEY`.

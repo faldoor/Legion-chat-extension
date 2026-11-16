@@ -33,7 +33,6 @@
   const SUPABASE_URL = 'https://xqwdpnpvfxvzmtmmupev.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_qK3o1yioybygYWo3R-BQvA_ks7maFKn';
   const SUPABASE_AUTH_KEY = 'fds_supabase_auth_v1';
-  const LOOT_OWNER_KEY = 'fds_loot_owner_v1';
   const LOOT_FUNCTION_PATH = '/functions/v1/loot';
   const CLOUD_POLL_MS = 5000;
   const LOOT_RARITIES = ['серая', 'необычная', 'редкая', 'эпическая', 'легендарная', 'мифическая'];
@@ -120,7 +119,6 @@
   let cloudSyncInterval = 0;
 
   let lootState = { round: null, rolls: [], serverNow: '', loaded: false, error: '' };
-  let lootOwnerToken = '';
   let lootSocket = null;
   let lootHeartbeat = 0;
   let lootPoll = 0;
@@ -469,28 +467,14 @@
 
   /* ---------- loot roll sync ---------- */
 
-  function readLootOwnerToken() {
-    let raw = '';
-    try { if (typeof GM_getValue === 'function') raw = GM_getValue(LOOT_OWNER_KEY, ''); } catch (e) { raw = ''; }
-    if (!raw) {
-      try { raw = localStorage.getItem(LOOT_OWNER_KEY) || ''; } catch (e) { raw = ''; }
-    }
-    const cached = readJson(raw);
-    if (cached && cached.token && (!cached.expires_at || Date.parse(cached.expires_at) > Date.now() + 60000)) lootOwnerToken = cached.token;
-  }
-
-  function writeLootOwnerToken(token, expiresAt) {
-    lootOwnerToken = token || '';
-    const raw = JSON.stringify({ token: lootOwnerToken, expires_at: expiresAt || '' });
-    try { if (typeof GM_setValue === 'function') GM_setValue(LOOT_OWNER_KEY, raw); } catch (e) { /* ignore */ }
-    try { localStorage.setItem(LOOT_OWNER_KEY, raw); } catch (e) { /* ignore */ }
-    renderLootPanel();
+  function isLootOwner() {
+    return cleanNick(cfg.nick) === 'faldoorch';
   }
 
   async function lootRequest(method, path, body, owner) {
-    if (owner) return cloudRequest(method, LOOT_FUNCTION_PATH + path, body, lootOwnerToken);
     const session = await ensureCloudSession();
-    return cloudRequest(method, LOOT_FUNCTION_PATH + path, body, session.access_token);
+    const payload = owner ? Object.assign({}, body || {}, { owner_nick: cfg.nick }) : body;
+    return cloudRequest(method, LOOT_FUNCTION_PATH + path, payload, session.access_token);
   }
 
   function applyLootState(payload) {
@@ -565,38 +549,8 @@
     }
   }
 
-  async function processLootOAuthCallback() {
-    const query = new URLSearchParams(location.search);
-    const code = query.get('owner_code');
-    const oauthError = query.get('loot_error');
-    if (!code && !oauthError) return;
-    history.replaceState(null, '', location.pathname + location.hash);
-    if (oauthError) {
-      lootState.error = 'Вход владельца не выполнен: ' + oauthError;
-      return;
-    }
-    try {
-      const data = await cloudRequest('POST', LOOT_FUNCTION_PATH + '/owner/exchange', { code });
-      writeLootOwnerToken(data.owner_token, data.expires_at);
-      await loadLootState();
-    } catch (e) {
-      lootState.error = 'Не удалось завершить вход владельца';
-    }
-  }
-
-  async function startLootOwnerLogin() {
-    try {
-      const data = await cloudRequest('GET', LOOT_FUNCTION_PATH + '/twitch/start');
-      if (!data || !data.authorize_url) throw new Error('OAuth URL missing');
-      location.href = data.authorize_url;
-    } catch (e) {
-      lootState.error = 'Не удалось начать вход Twitch';
-      renderLootPanel();
-    }
-  }
-
   async function createLootRound() {
-    if (!lootOwnerToken || !shadow) return;
+    if (!isLootOwner() || !shadow) return;
     const itemName = shadow.getElementById('fdsLootItem').value.trim();
     const rarity = shadow.getElementById('fdsLootRarity').value;
     const duration = Number(shadow.getElementById('fdsLootDuration').value);
@@ -614,13 +568,13 @@
   }
 
   async function finishLootRound() {
-    if (!lootOwnerToken) return;
+    if (!isLootOwner()) return;
     try { await lootRequest('POST', '/loot/round/finish', {}, true); await loadLootState(); }
     catch (e) { lootState.error = 'Не удалось завершить разролл'; renderLootPanel(); }
   }
 
   async function clearLootRolls() {
-    if (!lootOwnerToken) return;
+    if (!isLootOwner()) return;
     try { await lootRequest('POST', '/loot/clear', {}, true); await loadLootState(); }
     catch (e) { lootState.error = 'Не удалось очистить журнал'; renderLootPanel(); }
   }
@@ -1297,7 +1251,7 @@
     const windowEl = shadow.getElementById('fdsLootWindow');
     if (!windowEl) return;
     const round = lootState.round;
-    const owner = !!lootOwnerToken;
+    const owner = isLootOwner();
     const empty = !round;
     windowEl.hidden = !lootOpen;
     shadow.getElementById('fdsMainWindow').hidden = lootOpen;
@@ -1426,7 +1380,7 @@
             <div id="fdsLootBody"><div class="loot-empty">Загружаю состояние разролла…</div></div>
             <div class="loot-owner" id="fdsLootLogin">
               <div class="loot-owner-title">Управление владельца</div>
-              <button class="mini loot-owner-login" type="button" id="fdsLootLoginBtn">Войти через Twitch</button>
+              <div class="hint2">Укажи ник <b>faldoorch</b> в настройках расширения.</div>
             </div>
             <div class="loot-owner" id="fdsLootOwner" hidden>
               <div class="loot-owner-title">Новый предмет</div>
@@ -1592,7 +1546,6 @@
       lootOpen = false;
       renderLootPanel();
     });
-    shadow.getElementById('fdsLootLoginBtn').addEventListener('click', startLootOwnerLogin);
     shadow.getElementById('fdsLootCreate').addEventListener('click', createLootRound);
     shadow.getElementById('fdsLootFinish').addEventListener('click', finishLootRound);
     shadow.getElementById('fdsLootClear').addEventListener('click', clearLootRolls);
@@ -1715,8 +1668,6 @@
     const firstRun = !cfg.asked;
     readSharedCache();
     readCloudCache();
-    readLootOwnerToken();
-    processLootOAuthCallback();
     if (!cfg.nick) {
       const found = detectOwnNick();
       if (found) {

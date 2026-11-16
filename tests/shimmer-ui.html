@@ -31,10 +31,17 @@ setTimeout(() => {
       server_now: new Date().toISOString(),
     });
     model.loot.open();
+    model.cfg.nick = 'pupok309';
+    model.refresh();
+    model.loot.open();
     ok('item and rarity render', shadow.getElementById('fdsLootBody').textContent.includes('Тестовый меч') && shadow.getElementById('fdsLootBody').textContent.includes('эпическая'));
     ok('announcement stays in UI', shadow.getElementById('fdsLootBody').textContent.includes('ВНИМАНИЕ ЛЕГИОН!'));
     ok('journal renders roll', shadow.querySelector('.loot-journal').textContent.includes('87'));
     ok('participant cannot see owner controls', shadow.getElementById('fdsLootOwner').hidden && !shadow.getElementById('fdsLootLogin').hidden);
+    model.cfg.nick = 'faldoorch';
+    model.refresh();
+    model.loot.open();
+    ok('faldoorch sees owner controls', !shadow.getElementById('fdsLootOwner').hidden && shadow.getElementById('fdsLootLogin').hidden);
     model.loot.setState({
       round: { id: 'expired', item_name: 'Старый предмет', rarity: 'серая', status: 'active', ends_at: new Date(Date.now() - 1000).toISOString() },
       rolls: [], server_now: new Date().toISOString(),
