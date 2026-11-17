@@ -13,7 +13,7 @@ Userscript для чата Legion Game:
 
 1. Установить [Tampermonkey](https://www.tampermonkey.net/).
 2. Открыть raw-файл userscript:
-   <https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.7/legion-guild.user.js>
+   <https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.8/legion-guild.user.js>
 3. Нажать **Install**.
 
 Стили работают только у пользователей, у которых установлен этот userscript.
@@ -31,7 +31,7 @@ Userscript для чата Legion Game:
 
 После изменения файла и публикации в `main` пользователям достаточно обновить страницу. Скрипт периодически обновляет список и хранит последний успешный вариант в кэше.
 
-Выбор краски каждого участника синхронизируется отдельно через Supabase: свой ник получает локальную краску, а остальные участники — только свою опубликованную краску. Realtime применяется сразу; резервная проверка выполняется примерно раз в 5 секунд.
+Выбор краски каждого участника синхронизируется отдельно через Supabase: свой ник получает локальную краску, а остальные участники — только свою опубликованную краску. Список обновляется через разрешённые HTTP-запросы примерно раз в 5 секунд.
 
 Доступные id красок находятся в меню расширения: `aurora`, `rainbow`, `holo`, `sunset`, `gold`, `cyber`, `candy`, `ice`, `mint`, `ocean`, `sakura`, `lava`, `matrix`, `toxic`, `fire`, `emerald`, `chrome`, `lavender`, `tropical`, `cosmos`.
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Легион - Гильдейское расширение
 // @namespace    https://legiongame.gg/
-// @version      1.9.7
+// @version      1.9.8
 // @description  Гильдейское расширение для чата Легиона: переливание ника, общий список гильдии и безопасное распределение лута.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
 // @connect      xqwdpnpvfxvzmtmmupev.supabase.co
-// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.7/legion-guild.user.js
-// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.7/legion-guild.user.js
+// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.8/legion-guild.user.js
+// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.8/legion-guild.user.js
 // ==/UserScript==
 
 (function () {
@@ -113,15 +113,11 @@
   let cloudSession = null;
   let cloudAuthPromise = null;
   let cloudState = 'idle';
-  let cloudSocket = null;
-  let cloudHeartbeat = 0;
   let cloudPoll = 0;
   let cloudPublishTimer = 0;
   let cloudSyncInterval = 0;
 
   let lootState = { round: null, rolls: [], serverNow: '', loaded: false, error: '' };
-  let lootSocket = null;
-  let lootHeartbeat = 0;
   let lootPoll = 0;
   let lootSyncInterval = 0;
   let lootLoadPromise = null;
@@ -389,7 +385,6 @@
       applyCloudRows(rows);
       cloudState = 'ok';
       updateSharedInfo();
-      connectCloudRealtime();
     } catch (e) {
       cloudState = 'error';
       updateSharedInfo();
@@ -403,56 +398,6 @@
       cloudPoll = 0;
       if (cfg.shared && !document.hidden) loadCloudPaints();
     }, CLOUD_POLL_MS);
-  }
-
-  function connectCloudRealtime() {
-    if (cloudSocket || !cloudSession || typeof WebSocket !== 'function') return;
-    const wsUrl = SUPABASE_URL.replace(/^http/, 'ws')
-      + '/realtime/v1/websocket?apikey=' + encodeURIComponent(SUPABASE_KEY) + '&vsn=1.0.0';
-    try { cloudSocket = new WebSocket(wsUrl); } catch (e) { scheduleCloudPoll(); return; }
-    cloudSocket.addEventListener('open', () => {
-      cloudState = 'ok';
-      cloudSocket.send(JSON.stringify({
-        topic: 'realtime:public:guild_paints',
-        event: 'phx_join',
-        payload: {
-          access_token: cloudSession.access_token,
-          config: { postgres_changes: [{ event: '*', schema: 'public', table: 'guild_paints' }] },
-        },
-        ref: '1',
-      }));
-      updateSharedInfo();
-    });
-    cloudSocket.addEventListener('message', (event) => {
-      const message = readJson(event.data);
-      if (!message) return;
-      if (message.event === 'postgres_changes') {
-        const payload = message.payload || {};
-        const change = payload.data || {};
-        const data = change.data && typeof change.data === 'object' ? change.data : change;
-        applyCloudChange(
-          data.eventType || data.type || data.event,
-          data.new || data.record,
-          data.old || data.old_record
-        );
-      } else if (message.event === 'phx_error' || message.event === 'phx_close') {
-        scheduleCloudPoll();
-      }
-    });
-    cloudSocket.addEventListener('close', () => {
-      if (cloudHeartbeat) window.clearInterval(cloudHeartbeat);
-      cloudHeartbeat = 0;
-      cloudSocket = null;
-      scheduleCloudPoll();
-    });
-    cloudSocket.addEventListener('error', () => { scheduleCloudPoll(); });
-    if (!cloudHeartbeat) {
-      cloudHeartbeat = window.setInterval(() => {
-        if (cloudSocket && cloudSocket.readyState === WebSocket.OPEN) {
-          cloudSocket.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: String(Date.now()) }));
-        }
-      }, 25000);
-    }
   }
 
   async function publishOwnPaint() {
@@ -488,10 +433,6 @@
       if (!error || error.status !== 401) throw error;
       cloudSession = null;
       writeCloudCache();
-      if (lootSocket) {
-        try { lootSocket.close(); } catch (e) { /* ignore */ }
-        lootSocket = null;
-      }
       session = await ensureCloudSession();
       return cloudRequest(method, LOOT_FUNCTION_PATH + path, payload, session.access_token);
     }
@@ -515,7 +456,6 @@
     lootLoadPromise = (async () => {
       try {
         applyLootState(await lootRequest('GET', '/loot/state'));
-        connectLootRealtime();
       } catch (e) {
         lootState.error = 'Не удалось загрузить состояние разролла';
         lootState.loaded = true;
@@ -541,56 +481,6 @@
       lootPoll = 0;
       if (!document.hidden) loadLootState();
     }, CLOUD_POLL_MS);
-  }
-
-  function connectLootRealtime() {
-    if (lootSocket || !cloudSession || typeof WebSocket !== 'function') return;
-    const wsUrl = SUPABASE_URL.replace(/^http/, 'ws')
-      + '/realtime/v1/websocket?apikey=' + encodeURIComponent(SUPABASE_KEY) + '&vsn=1.0.0';
-    try { lootSocket = new WebSocket(wsUrl); } catch (e) { scheduleLootPoll(); return; }
-    lootSocket.addEventListener('open', () => {
-      const topic = 'realtime:loot-state';
-      lootSocket.send(JSON.stringify({
-        topic,
-        event: 'phx_join',
-        payload: {
-          access_token: cloudSession.access_token,
-          config: {
-            postgres_changes: [
-              { event: '*', schema: 'public', table: 'loot_rounds' },
-              { event: '*', schema: 'public', table: 'loot_rolls' },
-            ],
-          },
-        },
-        ref: 'loot-state',
-        join_ref: 'loot-state',
-      }));
-    });
-    lootSocket.addEventListener('message', (event) => {
-      const message = readJson(event.data);
-      if (!message) return;
-      if (message.event === 'postgres_changes') {
-        loadLootState();
-      } else if (message.event === 'phx_reply' && message.payload && message.payload.status === 'error') {
-        scheduleLootPoll();
-      } else if (message.event === 'phx_error' || message.event === 'phx_close') {
-        scheduleLootPoll();
-      }
-    });
-    lootSocket.addEventListener('close', () => {
-      lootSocket = null;
-      if (lootHeartbeat) window.clearInterval(lootHeartbeat);
-      lootHeartbeat = 0;
-      scheduleLootPoll();
-    });
-    lootSocket.addEventListener('error', scheduleLootPoll);
-    if (!lootHeartbeat) {
-      lootHeartbeat = window.setInterval(() => {
-        if (lootSocket && lootSocket.readyState === WebSocket.OPEN) {
-          lootSocket.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: String(Date.now()) }));
-        }
-      }, 25000);
-    }
   }
 
   async function createLootRound() {

@@ -11,9 +11,14 @@
   const mem = {};
   window.GM_getValue = (key, fallback) => (key in mem ? mem[key] : fallback);
   window.GM_setValue = (key, value) => { mem[key] = value; };
-  window.GM_registerMenuCommand = () => {};
-  window.__FDS_TEST__ = true;
-  mem.fds_cfg_v1 = JSON.stringify({ shared: false });
+   window.GM_registerMenuCommand = () => {};
+   window.__FDS_TEST__ = true;
+   window.__FDS_WEBSOCKET_ATTEMPTS__ = 0;
+   window.WebSocket = function () {
+     window.__FDS_WEBSOCKET_ATTEMPTS__ += 1;
+     throw new Error('WebSocket must not be used by the userscript');
+   };
+   mem.fds_cfg_v1 = JSON.stringify({ shared: false });
 </script>
 <script src="../legion-guild.user.js"></script>
 <script>
@@ -24,8 +29,9 @@ setTimeout(() => {
     const model = window.FaldoorchShimmer;
     model.open();
     const shadow = document.getElementById('fds-host').shadowRoot;
-    ok('loot window exists', !!shadow.getElementById('fdsLootWindow'));
-    ok('owner hint is removed', !shadow.textContent.includes('Управление владельца') && !shadow.textContent.includes('Укажи ник faldoorch'));
+     ok('loot window exists', !!shadow.getElementById('fdsLootWindow'));
+     ok('owner hint is removed', !shadow.textContent.includes('Управление владельца') && !shadow.textContent.includes('Укажи ник faldoorch'));
+     ok('CSP-safe mode does not open WebSocket', window.__FDS_WEBSOCKET_ATTEMPTS__ === 0);
     ok('menu uses legionnaire helmet SVG', !!shadow.querySelector('.bubble .bicon svg .helmet-crest'));
     const latestChat = document.querySelector('ol.cy-chat-l > li:last-child');
     ok('latest chat message remains intact', latestChat.textContent.includes('@faldoorch') && !latestChat.querySelector('[data-fds-mention]') && !latestChat.classList.contains('fds-name'));
