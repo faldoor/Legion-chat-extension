@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Легион - Гильдейское расширение
 // @namespace    https://legiongame.gg/
-// @version      1.9.5
+// @version      1.9.6
 // @description  Гильдейское расширение для чата Легиона: переливание ника, общий список гильдии и безопасное распределение лута.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
 // @connect      xqwdpnpvfxvzmtmmupev.supabase.co
-// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.5/legion-guild.user.js
-// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.5/legion-guild.user.js
+// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.6/legion-guild.user.js
+// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.6/legion-guild.user.js
 // ==/UserScript==
 
 (function () {
@@ -35,6 +35,7 @@
   const SUPABASE_AUTH_KEY = 'fds_supabase_auth_v1';
   const LOOT_FUNCTION_PATH = '/functions/v1/loot';
   const CLOUD_POLL_MS = 5000;
+  const LOOT_SYNC_MS = 1000;
   const LOOT_RARITIES = ['серая', 'необычная', 'редкая', 'эпическая', 'легендарная', 'мифическая'];
 
   const PAINTS = [
@@ -122,6 +123,9 @@
   let lootSocket = null;
   let lootHeartbeat = 0;
   let lootPoll = 0;
+  let lootSyncInterval = 0;
+  let lootLoadPromise = null;
+  let lootTimerTicks = 0;
   let lootTimer = 0;
   let lootAnnouncementId = '';
 
@@ -491,15 +495,28 @@
 
   async function loadLootState() {
     if (TEST) return;
-    try {
-      applyLootState(await lootRequest('GET', '/loot/state'));
-      connectLootRealtime();
-    } catch (e) {
-      lootState.error = 'Не удалось загрузить состояние разролла';
-      lootState.loaded = true;
-      renderLootPanel();
-      scheduleLootPoll();
-    }
+    if (lootLoadPromise) return lootLoadPromise;
+    lootLoadPromise = (async () => {
+      try {
+        applyLootState(await lootRequest('GET', '/loot/state'));
+        connectLootRealtime();
+      } catch (e) {
+        lootState.error = 'Не удалось загрузить состояние разролла';
+        lootState.loaded = true;
+        renderLootPanel();
+        scheduleLootPoll();
+      } finally {
+        lootLoadPromise = null;
+      }
+    })();
+    return lootLoadPromise;
+  }
+
+  function startLootSync() {
+    if (TEST || lootSyncInterval) return;
+    lootSyncInterval = window.setInterval(() => {
+      if (!document.hidden) loadLootState();
+    }, LOOT_SYNC_MS);
   }
 
   function scheduleLootPoll() {
@@ -516,22 +533,33 @@
       + '/realtime/v1/websocket?apikey=' + encodeURIComponent(SUPABASE_KEY) + '&vsn=1.0.0';
     try { lootSocket = new WebSocket(wsUrl); } catch (e) { scheduleLootPoll(); return; }
     lootSocket.addEventListener('open', () => {
-      const join = (table, ref) => lootSocket.send(JSON.stringify({
-        topic: 'realtime:public:' + table,
+      const topic = 'realtime:loot-state';
+      lootSocket.send(JSON.stringify({
+        topic,
         event: 'phx_join',
         payload: {
           access_token: cloudSession.access_token,
-          config: { postgres_changes: [{ event: '*', schema: 'public', table }] },
+          config: {
+            postgres_changes: [
+              { event: '*', schema: 'public', table: 'loot_rounds' },
+              { event: '*', schema: 'public', table: 'loot_rolls' },
+            ],
+          },
         },
-        ref,
+        ref: 'loot-state',
+        join_ref: 'loot-state',
       }));
-      join('loot_rounds', 'loot-rounds');
-      join('loot_rolls', 'loot-rolls');
     });
     lootSocket.addEventListener('message', (event) => {
       const message = readJson(event.data);
-      if (message && message.event === 'postgres_changes') loadLootState();
-      else if (message && (message.event === 'phx_error' || message.event === 'phx_close')) scheduleLootPoll();
+      if (!message) return;
+      if (message.event === 'postgres_changes') {
+        loadLootState();
+      } else if (message.event === 'phx_reply' && message.payload && message.payload.status === 'error') {
+        scheduleLootPoll();
+      } else if (message.event === 'phx_error' || message.event === 'phx_close') {
+        scheduleLootPoll();
+      }
     });
     lootSocket.addEventListener('close', () => {
       lootSocket = null;
@@ -589,6 +617,7 @@
       if (data && data.roll) lootState.rolls = [data.roll, ...lootState.rolls.filter((row) => row.id !== data.roll.id)];
       lootState.error = '';
       renderLootPanel();
+      loadLootState();
     } catch (e) {
       lootState.error = 'Ролл не принят: возможно, ты уже бросал или время истекло.';
       renderLootPanel();
@@ -1311,6 +1340,7 @@
       shadow.getElementById('fdsLootNotice').hidden = false;
     }
     shadow.getElementById('fdsLootOwner').hidden = !owner;
+    syncLootTimer();
   }
 
   function escapeHtml(value) {
@@ -1736,7 +1766,11 @@
     cloudSyncInterval = window.setInterval(() => {
       if (cfg.shared && !document.hidden) loadCloudPaints();
     }, CLOUD_POLL_MS);
-    lootTimer = window.setInterval(syncLootTimer, 1000);
+    lootTimer = window.setInterval(() => {
+      lootTimerTicks += 1;
+      syncLootTimer();
+    }, 1000);
+    startLootSync();
     const mo = new MutationObserver(schedule);
     mo.observe(document.documentElement, {
       childList: true,
@@ -1795,6 +1829,8 @@
       setState: (payload) => applyLootState(payload),
       open: () => { lootOpen = true; renderLootPanel(); },
       close: () => { lootOpen = false; renderLootPanel(); },
+      syncTimer: syncLootTimer,
+      timerTicks: () => lootTimerTicks,
       state: () => lootState,
     },
   };

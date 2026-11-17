@@ -51,6 +51,15 @@ setTimeout(() => {
     ok('announcement stays in UI', shadow.getElementById('fdsLootNotice').textContent.includes('ВНИМАНИЕ ЛЕГИОН!'));
     ok('announcement is not duplicated', shadow.querySelectorAll('.loot-announcement').length === 1);
     ok('journal renders roll', shadow.querySelector('.loot-journal').textContent.includes('87'));
+    model.loot.setState({
+      round: { id: 'active', item_name: 'Тестовый меч', rarity: 'эпическая', status: 'active', ends_at: new Date(Date.now() + 120000).toISOString() },
+      rolls: [
+        { id: 'r2', round_id: 'active', user_id: 'other-2', nick: 'Другой игрок', roll: 99 },
+        { id: 'r1', round_id: 'active', user_id: 'other', nick: 'pupok309', roll: 87 },
+      ],
+      server_now: new Date().toISOString(),
+    });
+    ok('new server roll appears for everyone', shadow.querySelector('.loot-journal').textContent.includes('Другой игрок') && shadow.querySelector('.loot-journal').textContent.includes('99'));
     ok('participant cannot see owner controls', shadow.getElementById('fdsLootOwner').hidden && !shadow.getElementById('fdsLootLogin').hidden);
     model.cfg.nick = 'faldoorch';
     model.refresh();
@@ -64,35 +73,42 @@ setTimeout(() => {
     model.loot.setState({ round: null, rolls: [], server_now: new Date().toISOString() });
     ok('empty state renders', shadow.getElementById('fdsLootBody').textContent.includes('нет активного разролла'));
     model.loot.setState({
-      round: { id: 'live-timer', item_name: 'Live timer', rarity: 'серая', status: 'active', ends_at: new Date(Date.now() + 60000).toISOString() },
+      round: { id: 'live-timer', item_name: 'Live timer', rarity: 'серая', status: 'active', ends_at: new Date(Date.now() + 5000).toISOString() },
       rolls: [], server_now: new Date().toISOString(),
     });
+    model.loot.open();
     const timerBefore = shadow.querySelector('.loot-timer').textContent;
-    model.loot.state().round.ends_at = new Date(Date.now() - 1000).toISOString();
     setTimeout(() => {
       const timerAfter = shadow.querySelector('.loot-timer').textContent;
-      ok('live timer updates without state reload', timerBefore !== timerAfter || timerAfter === 'завершён');
-      ok('live timer disables roll after expiry', shadow.getElementById('fdsLootRoll').disabled && timerAfter === 'завершён');
-      model.cfg.nick = 'pupok309';
-      const observedChat = document.createElement('li');
-      observedChat.setAttribute('data-nick', 'pupok309');
-      observedChat.innerHTML = '<b data-nick="pupok309">pupok309</b> <span>сообщение через observer @faldoorch</span>';
-      chatList.appendChild(observedChat);
-      model.scan();
-      const finishObserverCheck = () => {
-        ok('observer message remains visible', observedChat.isConnected && observedChat.textContent.includes('сообщение через observer @faldoorch') && !observedChat.classList.contains('fds-name'));
-        ok('observer sender keeps shimmer', observedChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name'));
-        document.getElementById('out').textContent = rows.join('\n') + '\n\nитог: ' + rows.filter((row) => row.startsWith('OK')).length + '/' + rows.length + ' OK';
-      };
-      const waitForObserver = (left) => {
-        if (observedChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name') || left <= 0) {
-          finishObserverCheck();
-          return;
-        }
-        setTimeout(() => waitForObserver(left - 50), 50);
-      };
-      waitForObserver(1000);
-    }, 3200);
+      ok('live timer ticks every second', model.loot.timerTicks() >= 2);
+      model.loot.setState({
+        round: { id: 'live-timer', item_name: 'Live timer', rarity: 'серая', status: 'active', ends_at: new Date(Date.now() - 1000).toISOString() },
+        rolls: [], server_now: new Date().toISOString(),
+      });
+      setTimeout(() => {
+        ok('live timer updates without state reload [' + shadow.querySelector('.loot-timer').textContent + ']', shadow.querySelector('.loot-timer').textContent === 'завершён');
+        ok('live timer disables roll after expiry [' + shadow.getElementById('fdsLootRoll').disabled + ']', shadow.getElementById('fdsLootRoll').disabled);
+        model.cfg.nick = 'pupok309';
+        const observedChat = document.createElement('li');
+        observedChat.setAttribute('data-nick', 'pupok309');
+        observedChat.innerHTML = '<b data-nick="pupok309">pupok309</b> <span>сообщение через observer @faldoorch</span>';
+        chatList.appendChild(observedChat);
+        model.scan();
+        const finishObserverCheck = () => {
+          ok('observer message remains visible', observedChat.isConnected && observedChat.textContent.includes('сообщение через observer @faldoorch') && !observedChat.classList.contains('fds-name'));
+          ok('observer sender keeps shimmer', observedChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name'));
+          document.getElementById('out').textContent = rows.join('\n') + '\n\nитог: ' + rows.filter((row) => row.startsWith('OK')).length + '/' + rows.length + ' OK';
+        };
+        const waitForObserver = (left) => {
+          if (observedChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name') || left <= 0) {
+            finishObserverCheck();
+            return;
+          }
+          setTimeout(() => waitForObserver(left - 50), 50);
+        };
+        waitForObserver(1000);
+      }, 1200);
+    }, 2200);
   } catch (error) {
     document.getElementById('out').textContent = 'ERROR: ' + error.message + '\n' + error.stack;
   }
