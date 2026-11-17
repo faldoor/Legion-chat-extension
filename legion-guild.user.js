@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Легион - Гильдейское расширение
 // @namespace    https://legiongame.gg/
-// @version      1.9.6
+// @version      1.9.7
 // @description  Гильдейское расширение для чата Легиона: переливание ника, общий список гильдии и безопасное распределение лута.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
 // @connect      xqwdpnpvfxvzmtmmupev.supabase.co
-// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.6/legion-guild.user.js
-// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.6/legion-guild.user.js
+// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.7/legion-guild.user.js
+// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.7/legion-guild.user.js
 // ==/UserScript==
 
 (function () {
@@ -278,7 +278,11 @@
       const done = (status, text) => {
         const value = readJson(text);
         if (status >= 200 && status < 300) resolve(value);
-        else reject(new Error('Supabase HTTP ' + status));
+        else {
+          const failure = new Error('Supabase HTTP ' + status);
+          failure.status = status;
+          reject(failure);
+        }
       };
       if (typeof GM_xmlhttpRequest === 'function') {
         try {
@@ -476,9 +480,21 @@
   }
 
   async function lootRequest(method, path, body, owner) {
-    const session = await ensureCloudSession();
     const payload = owner ? Object.assign({}, body || {}, { owner_nick: cfg.nick }) : body;
-    return cloudRequest(method, LOOT_FUNCTION_PATH + path, payload, session.access_token);
+    let session = await ensureCloudSession();
+    try {
+      return await cloudRequest(method, LOOT_FUNCTION_PATH + path, payload, session.access_token);
+    } catch (error) {
+      if (!error || error.status !== 401) throw error;
+      cloudSession = null;
+      writeCloudCache();
+      if (lootSocket) {
+        try { lootSocket.close(); } catch (e) { /* ignore */ }
+        lootSocket = null;
+      }
+      session = await ensureCloudSession();
+      return cloudRequest(method, LOOT_FUNCTION_PATH + path, payload, session.access_token);
+    }
   }
 
   function applyLootState(payload) {
@@ -1308,7 +1324,6 @@
     windowEl.hidden = !lootOpen;
     shadow.getElementById('fdsMainWindow').hidden = lootOpen;
     shadow.getElementById('fdsLootOwner').hidden = !owner || empty;
-    shadow.getElementById('fdsLootLogin').hidden = owner;
     shadow.getElementById('fdsLootError').textContent = lootState.error || '';
     shadow.getElementById('fdsLootError').hidden = !lootState.error;
     if (empty) {
@@ -1438,10 +1453,6 @@
             <div class="sec-h"><span class="sec-t">Распределение лута</span><span class="val">общий раунд</span></div>
             <div class="loot-announcement" id="fdsLootNotice" hidden></div>
             <div id="fdsLootBody"><div class="loot-empty">Загружаю состояние разролла…</div></div>
-            <div class="loot-owner" id="fdsLootLogin">
-              <div class="loot-owner-title">Управление владельца</div>
-              <div class="hint2">Укажи ник <b>faldoorch</b> в настройках расширения.</div>
-            </div>
             <div class="loot-owner" id="fdsLootOwner" hidden>
               <div class="loot-owner-title">Новый предмет</div>
               <div class="field"><span>Название</span><input id="fdsLootItem" type="text" maxlength="160" placeholder="Название предмета"></div>
@@ -1609,7 +1620,7 @@
     shadow.getElementById('fdsLootOpen').addEventListener('click', () => {
       lootOpen = true;
       renderLootPanel();
-      if (!lootState.loaded) loadLootState();
+      loadLootState();
     });
     shadow.getElementById('fdsLootBack').addEventListener('click', () => {
       lootOpen = false;

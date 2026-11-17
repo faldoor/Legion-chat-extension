@@ -25,6 +25,7 @@ setTimeout(() => {
     model.open();
     const shadow = document.getElementById('fds-host').shadowRoot;
     ok('loot window exists', !!shadow.getElementById('fdsLootWindow'));
+    ok('owner hint is removed', !shadow.textContent.includes('Управление владельца') && !shadow.textContent.includes('Укажи ник faldoorch'));
     ok('menu uses legionnaire helmet SVG', !!shadow.querySelector('.bubble .bicon svg .helmet-crest'));
     const latestChat = document.querySelector('ol.cy-chat-l > li:last-child');
     ok('latest chat message remains intact', latestChat.textContent.includes('@faldoorch') && !latestChat.querySelector('[data-fds-mention]') && !latestChat.classList.contains('fds-name'));
@@ -60,11 +61,11 @@ setTimeout(() => {
       server_now: new Date().toISOString(),
     });
     ok('new server roll appears for everyone', shadow.querySelector('.loot-journal').textContent.includes('Другой игрок') && shadow.querySelector('.loot-journal').textContent.includes('99'));
-    ok('participant cannot see owner controls', shadow.getElementById('fdsLootOwner').hidden && !shadow.getElementById('fdsLootLogin').hidden);
+    ok('participant cannot see owner controls', shadow.getElementById('fdsLootOwner').hidden);
     model.cfg.nick = 'faldoorch';
     model.refresh();
     model.loot.open();
-    ok('faldoorch sees owner controls', !shadow.getElementById('fdsLootOwner').hidden && shadow.getElementById('fdsLootLogin').hidden);
+    ok('faldoorch sees owner controls', !shadow.getElementById('fdsLootOwner').hidden);
     model.loot.setState({
       round: { id: 'expired', item_name: 'Старый предмет', rarity: 'серая', status: 'active', ends_at: new Date(Date.now() - 1000).toISOString() },
       rolls: [], server_now: new Date().toISOString(),
