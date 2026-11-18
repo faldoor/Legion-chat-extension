@@ -34,7 +34,7 @@
 ## Поставить
 
 1. Поставь [Tampermonkey](https://www.tampermonkey.net/).
-2. Открой [`legion-chat.user.js`](https://raw.githubusercontent.com/faldoor/Legion-chat-extension/refs/tags/v1.11.0/legion-chat.user.js).
+2. Скачай [`legion-chat.user.js`](https://raw.githubusercontent.com/faldoor/Legion-chat-extension/refs/tags/v1.11.0/legion-chat.user.js) и закинь в Dashboard TamperMonkey.
 3. Нажми **Install**.
 
 Панель — «формуляр»: краска, скорость, свечение, три галочки и поле «чей ник переливается». В чат ничего не отправляется, всё работает в браузере.
