@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Легион - Гильдейское расширение
 // @namespace    https://legiongame.gg/
-// @version      1.9.8
-// @description  Гильдейское расширение для чата Легиона: переливание ника, общий список гильдии и безопасное распределение лута.
+// @version      1.10.0
+// @description  Гильдейское расширение для чата Легиона: сорок переливашек ника и общий список гильдии.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
 // @match        https://play.multidonate.ru/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
 // @connect      xqwdpnpvfxvzmtmmupev.supabase.co
-// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.8/legion-guild.user.js
-// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.9.8/legion-guild.user.js
+// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/legion-guild.user.js
+// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/legion-guild.user.js
 // ==/UserScript==
 
 (function () {
@@ -33,38 +33,54 @@
   const SUPABASE_URL = 'https://xqwdpnpvfxvzmtmmupev.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_qK3o1yioybygYWo3R-BQvA_ks7maFKn';
   const SUPABASE_AUTH_KEY = 'fds_supabase_auth_v1';
-  const LOOT_FUNCTION_PATH = '/functions/v1/loot';
   const CLOUD_POLL_MS = 5000;
-  const LOOT_SYNC_MS = 1000;
-  const LOOT_RARITIES = ['серая', 'необычная', 'редкая', 'эпическая', 'легендарная', 'мифическая'];
 
   const PAINTS = [
-    { id: 'aurora',  name: 'Аврора',     glow: '124,140,255', colors: ['#6ef3ff', '#7c8cff', '#d16bff', '#ff8ad8'] },
-    { id: 'rainbow', name: 'Радуга',     glow: '255,120,200', colors: ['#ff3d5a', '#ffb03a', '#f7f14a', '#4dff88', '#45d0ff', '#8a5cff'] },
-    { id: 'holo',    name: 'Голография', glow: '168,255,240', colors: ['#ffd1f7', '#a8fff0', '#b8c6ff', '#ffe9a8'] },
-    { id: 'sunset',  name: 'Закат',      glow: '255,110,60',  colors: ['#ff2d6f', '#ff7a18', '#ffd166', '#ff6a3d'] },
-    { id: 'gold',    name: 'Золото',     glow: '247,215,116', colors: ['#fff3c4', '#f7d774', '#c9962b', '#ffe9a8'] },
-    { id: 'cyber',   name: 'Кибер',      glow: '0,245,255',   colors: ['#00f5ff', '#8a5cff', '#ff00e5', '#00f5ff'] },
-    { id: 'candy',   name: 'Карамель',   glow: '255,158,203', colors: ['#ff9ecb', '#ffd1e8', '#a78bfa', '#7dd3fc'] },
-    { id: 'ice',     name: 'Лёд',        glow: '125,211,252', colors: ['#eaf9ff', '#9fe3ff', '#38bdf8', '#eaf9ff'] },
-    { id: 'mint',    name: 'Мята',       glow: '125,255,207', colors: ['#7dffcf', '#4de1ff', '#7dffcf'] },
-    { id: 'ocean',   name: 'Океан',      glow: '43,127,255',  colors: ['#6ef3ff', '#2b7fff', '#6ef3ff'] },
-    { id: 'sakura',  name: 'Сакура',     glow: '255,158,203', colors: ['#ffd1e8', '#ff9ecb', '#c78bff', '#ffd1e8'] },
-    { id: 'lava',    name: 'Лава',       glow: '255,90,0',    colors: ['#ff3d00', '#ffb300', '#ff6a00', '#ff3d00'] },
-    { id: 'matrix',  name: 'Матрица',    glow: '0,255,136',   colors: ['#b6ff2e', '#00ff88', '#0aa06e', '#b6ff2e'] },
-    { id: 'toxic',   name: 'Токсин',     glow: '124,255,58',  colors: ['#b6ff2e', '#22ffa0', '#b6ff2e'] },
-    { id: 'fire',    name: 'Огонь',      glow: '255,120,40',  colors: ['#ff2d00', '#ff7a00', '#ffd166', '#fff1a8', '#ff6a00'] },
-    { id: 'emerald', name: 'Изумруд',    glow: '0,220,140',   colors: ['#b6ffcf', '#00e08a', '#007a52', '#7dffcf'] },
-    { id: 'chrome',  name: 'Хром',       glow: '200,215,255', colors: ['#ffffff', '#e6eeff', '#a9bce8', '#ffffff', '#cfdcff'] },
-    { id: 'lavender',name: 'Лаванда',    glow: '190,160,255', colors: ['#e6dcff', '#b9a0ff', '#8f7aff', '#ffd1f0'] },
-    { id: 'tropical',name: 'Тропики',    glow: '80,240,210',  colors: ['#4dffd2', '#b6ff2e', '#ffd166', '#ff7a9c', '#4dffd2'] },
-    { id: 'cosmos',  name: 'Космос',     glow: '140,110,255', colors: ['#b8c6ff', '#6e5cff', '#ff5cc8', '#6ef3ff', '#b8c6ff'] },
+    { id: 'aurora', name: 'Аврора', glow: '96,214,255', colors: ['#7dffb0', '#35e0c0', '#4aa8ff', '#a06bff'] },
+    { id: 'rainbow', name: 'Радуга', glow: '255,120,200', colors: ['#ff2d55', '#ff9500', '#ffe83d', '#35d94f', '#22c7ff', '#7a5cff'] },
+    { id: 'holo', name: 'Голография', glow: '168,255,240', colors: ['#ff8fe0', '#6ff0e0', '#b18cff', '#ffe07a'] },
+    { id: 'sunset', name: 'Закат', glow: '255,110,60', colors: ['#ff2d6f', '#ff6a1f', '#ffc247', '#ff9d5c'] },
+    { id: 'gold', name: 'Золото', glow: '247,215,116', colors: ['#fff6cf', '#f2c94c', '#a87a1f', '#6b4a0a'] },
+    { id: 'cyber', name: 'Кибер', glow: '0,245,255', colors: ['#22f5ff', '#3d7bff', '#a24bff', '#ff3dcf'] },
+    { id: 'candy', name: 'Карамель', glow: '255,158,203', colors: ['#ff8fc7', '#ffc2e2', '#b18cff', '#7fd0ff'] },
+    { id: 'ice', name: 'Лёд', glow: '125,211,252', colors: ['#f2ffff', '#b0f0f5', '#4fd0e0', '#1f9fb8'] },
+    { id: 'mint', name: 'Мята', glow: '125,255,207', colors: ['#9dffd8', '#4fe3c1', '#2bb0a8'] },
+    { id: 'ocean', name: 'Океан', glow: '43,127,255', colors: ['#4fe0ff', '#1f7ae0', '#12307a'] },
+    { id: 'sakura', name: 'Сакура', glow: '255,158,203', colors: ['#fff0f6', '#ffc6dd', '#e88ab0', '#b85a80'] },
+    { id: 'lava', name: 'Лава', glow: '255,90,0', colors: ['#4a0505', '#b81200', '#ff5a00', '#ffab2e'] },
+    { id: 'matrix', name: 'Матрица', glow: '0,255,136', colors: ['#c8ff5c', '#35e06a', '#0a8f4f', '#065c3a'] },
+    { id: 'toxic', name: 'Токсин', glow: '124,255,58', colors: ['#eaff3d', '#9dff2e', '#2ee88f', '#00b8a0'] },
+    { id: 'fire', name: 'Огонь', glow: '255,120,40', colors: ['#c40023', '#ff4d00', '#ff9d00', '#ffe66b'] },
+    { id: 'emerald', name: 'Изумруд', glow: '0,220,140', colors: ['#b6ffd9', '#2ee08f', '#0a9e6a', '#046b52'] },
+    { id: 'chrome', name: 'Хром', glow: '200,215,255', colors: ['#ffffff', '#d7e2ef', '#7f93a8', '#e8f1fb'] },
+    { id: 'lavender', name: 'Лаванда', glow: '190,160,255', colors: ['#e8ecff', '#c2c9ff', '#8f9aff', '#d9dcff'] },
+    { id: 'tropical', name: 'Тропики', glow: '80,240,210', colors: ['#3df5cf', '#a7ff3d', '#ffcf3d', '#ff6f8f'] },
+    { id: 'cosmos', name: 'Космос', glow: '120,110,255', colors: ['#8f9bff', '#2f2fa8', '#6a1fb0', '#00c2d9'] },
+    { id: 'neon', name: 'Неон', glow: '57,255,20', colors: ['#39ff14', '#00e5ff', '#ff00e5'] },
+    { id: 'peach', name: 'Персик', glow: '255,158,122', colors: ['#fff0e0', '#ffc09a', '#ff8f6b', '#d95a4a'] },
+    { id: 'rose', name: 'Роза', glow: '217,122,154', colors: ['#f2d2d8', '#d98a9a', '#b04a60', '#7a2a3c'] },
+    { id: 'steel', name: 'Сталь', glow: '159,184,216', colors: ['#eaf4ff', '#b7d0e8', '#6f9cc8', '#2f5c8a'] },
+    { id: 'copper', name: 'Медь', glow: '224,139,75', colors: ['#ffd9a8', '#e07a2a', '#8f3a12', '#1f9e82'] },
+    { id: 'sky', name: 'Небо', glow: '120,190,255', colors: ['#eaf7ff', '#a8dcff', '#4a9eff', '#1f5fd0'] },
+    { id: 'forest', name: 'Лес', glow: '111,207,111', colors: ['#d8f5b0', '#7fbf4a', '#2f7a3a', '#144a2a'] },
+    { id: 'sand', name: 'Песок', glow: '217,191,150', colors: ['#fbf1dc', '#dcc39a', '#b99b70', '#8a6f4c'] },
+    { id: 'violet', name: 'Фиалка', glow: '185,140,255', colors: ['#e8d0ff', '#b06bff', '#7a2ee8', '#ff4fc8'] },
+    { id: 'ruby', name: 'Рубин', glow: '255,77,109', colors: ['#ffd2dc', '#ff3d5a', '#b8002f', '#6e001c'] },
+    { id: 'amber', name: 'Янтарь', glow: '255,194,71', colors: ['#ffd08a', '#f0851f', '#b34a08', '#6b2503'] },
+    { id: 'graphite', name: 'Графит', glow: '148,163,184', colors: ['#d7dce2', '#9aa2ac', '#4f565f', '#23272c'] },
+    { id: 'gum', name: 'Жвачка', glow: '255,138,226', colors: ['#ff2f8f', '#ff86c8', '#5cf0b8', '#00c2a0'] },
+    { id: 'lagoon', name: 'Лагуна', glow: '77,225,208', colors: ['#d9fff8', '#5fe8d8', '#1f9e9e', '#0a5f6b'] },
+    { id: 'plasma', name: 'Плазма', glow: '176,107,255', colors: ['#ff2fb0', '#c02eff', '#6a2ee8', '#2f3db0'] },
+    { id: 'honey', name: 'Мёд', glow: '255,209,102', colors: ['#fffdf0', '#fff0c2', '#f5d98f', '#d9b96a'] },
+    { id: 'storm', name: 'Гроза', glow: '127,156,245', colors: ['#e6e4ff', '#7f7ac8', '#2a2666', '#a8e8ff'] },
+    { id: 'cotton', name: 'Хлопок', glow: '255,233,243', colors: ['#fffdf8', '#f5ece2', '#e6d9cc', '#fffaf2'] },
+    { id: 'jade', name: 'Нефрит', glow: '127,240,189', colors: ['#e8fff0', '#a8f0c8', '#5fbf8f', '#2f7a5c'] },
+    { id: 'dusk', name: 'Сумерки', glow: '143,107,255', colors: ['#ffd2b8', '#ff8f8f', '#a86bff', '#4a3db0'] },
   ];
 
   const DEFAULTS = {
     enabled: true,
     nick: '',
-    aliases: '',
     paint: 'aurora',
     speed: 8,
     glow: 7,
@@ -73,7 +89,6 @@
     asked: false,
     posR: 16,
     posT: 16,
-    shared: true,
   };
 
   function readJson(raw) {
@@ -96,6 +111,7 @@
   if (!PAINTS.some((p) => p.id === cfg.paint)) cfg.paint = DEFAULTS.paint;
   cfg.speed = Math.min(20, Math.max(3, Number(cfg.speed) || DEFAULTS.speed));
   cfg.glow = Math.min(16, Math.max(0, Number(cfg.glow) || 0));
+  delete cfg.shared;
 
   function saveCfg() {
     const s = JSON.stringify(cfg);
@@ -117,14 +133,6 @@
   let cloudPublishTimer = 0;
   let cloudSyncInterval = 0;
 
-  let lootState = { round: null, rolls: [], serverNow: '', loaded: false, error: '' };
-  let lootPoll = 0;
-  let lootSyncInterval = 0;
-  let lootLoadPromise = null;
-  let lootTimerTicks = 0;
-  let lootTimer = 0;
-  let lootAnnouncementId = '';
-
   function paintById(id) {
     return PAINTS.find((p) => p.id === id) || null;
   }
@@ -143,11 +151,9 @@
 
   function paintForNick(value) {
     const key = cleanNick(value);
-    const local = [cfg.nick, ...String(cfg.aliases || '').split(/[\s,;]+/)]
-      .some((nick) => cleanNick(nick) === key);
-    if (local) return currentPaint();
-    if (!cfg.shared) return null;
-    const id = key ? (cloudPaints[key] || sharedPaints[key]) : '';
+    if (!key) return null;
+    if (key === cleanNick(cfg.nick)) return currentPaint();
+    const id = cloudPaints[key] || sharedPaints[key];
     return id ? paintById(id) : null;
   }
 
@@ -191,11 +197,6 @@
   }
 
   function loadShared(force) {
-    if (!cfg.shared) {
-      sharedState = 'off';
-      updateSharedInfo();
-      return;
-    }
     if (!force && sharedStamp && Date.now() - sharedStamp < SHARED_TTL) {
       sharedState = 'ok';
       updateSharedInfo();
@@ -396,12 +397,12 @@
     if (cloudPoll) return;
     cloudPoll = window.setTimeout(() => {
       cloudPoll = 0;
-      if (cfg.shared && !document.hidden) loadCloudPaints();
+      if (!document.hidden) loadCloudPaints();
     }, CLOUD_POLL_MS);
   }
 
   async function publishOwnPaint() {
-    if (TEST || !cfg.nick || !cfg.shared) return;
+    if (TEST || !cfg.nick) return;
     try {
       const session = await ensureCloudSession();
       await cloudRequest(
@@ -416,134 +417,6 @@
       cloudState = 'error';
       updateSharedInfo();
     }
-  }
-
-  /* ---------- loot roll sync ---------- */
-
-  function isLootOwner() {
-    return cleanNick(cfg.nick) === 'faldoorch';
-  }
-
-  async function lootRequest(method, path, body, owner) {
-    const payload = owner ? Object.assign({}, body || {}, { owner_nick: cfg.nick }) : body;
-    let session = await ensureCloudSession();
-    try {
-      return await cloudRequest(method, LOOT_FUNCTION_PATH + path, payload, session.access_token);
-    } catch (error) {
-      if (!error || error.status !== 401) throw error;
-      cloudSession = null;
-      writeCloudCache();
-      session = await ensureCloudSession();
-      return cloudRequest(method, LOOT_FUNCTION_PATH + path, payload, session.access_token);
-    }
-  }
-
-  function applyLootState(payload) {
-    if (!payload || typeof payload !== 'object') return;
-    lootState = {
-      round: payload.round || null,
-      rolls: Array.isArray(payload.rolls) ? payload.rolls : [],
-      serverNow: payload.server_now || new Date().toISOString(),
-      loaded: true,
-      error: '',
-    };
-    renderLootPanel();
-  }
-
-  async function loadLootState() {
-    if (TEST) return;
-    if (lootLoadPromise) return lootLoadPromise;
-    lootLoadPromise = (async () => {
-      try {
-        applyLootState(await lootRequest('GET', '/loot/state'));
-      } catch (e) {
-        lootState.error = 'Не удалось загрузить состояние разролла';
-        lootState.loaded = true;
-        renderLootPanel();
-        scheduleLootPoll();
-      } finally {
-        lootLoadPromise = null;
-      }
-    })();
-    return lootLoadPromise;
-  }
-
-  function startLootSync() {
-    if (TEST || lootSyncInterval) return;
-    lootSyncInterval = window.setInterval(() => {
-      if (!document.hidden) loadLootState();
-    }, LOOT_SYNC_MS);
-  }
-
-  function scheduleLootPoll() {
-    if (lootPoll) return;
-    lootPoll = window.setTimeout(() => {
-      lootPoll = 0;
-      if (!document.hidden) loadLootState();
-    }, CLOUD_POLL_MS);
-  }
-
-  async function createLootRound() {
-    if (!isLootOwner() || !shadow) return;
-    const itemName = shadow.getElementById('fdsLootItem').value.trim();
-    const rarity = shadow.getElementById('fdsLootRarity').value;
-    const duration = Number(shadow.getElementById('fdsLootDuration').value);
-    try {
-      applyLootState(await lootRequest('POST', '/loot/round', {
-        item_name: itemName,
-        rarity,
-        duration_seconds: duration,
-      }, true));
-      shadow.getElementById('fdsLootItem').value = '';
-    } catch (e) {
-      lootState.error = 'Не удалось создать разролл. Проверьте поля.';
-      renderLootPanel();
-    }
-  }
-
-  async function finishLootRound() {
-    if (!isLootOwner()) return;
-    try { await lootRequest('POST', '/loot/round/finish', {}, true); await loadLootState(); }
-    catch (e) { lootState.error = 'Не удалось завершить разролл'; renderLootPanel(); }
-  }
-
-  async function clearLootRolls() {
-    if (!isLootOwner()) return;
-    try { await lootRequest('POST', '/loot/clear', {}, true); await loadLootState(); }
-    catch (e) { lootState.error = 'Не удалось очистить журнал'; renderLootPanel(); }
-  }
-
-  async function rollLoot() {
-    const round = lootState.round;
-    if (!round || !isLootRoundActive(round)) return;
-    const button = shadow && shadow.getElementById('fdsLootRoll');
-    if (button) button.disabled = true;
-    try {
-      const data = await lootRequest('POST', '/loot/roll', { round_id: round.id, nick: cfg.nick || PLACEHOLDER });
-      if (data && data.roll) lootState.rolls = [data.roll, ...lootState.rolls.filter((row) => row.id !== data.roll.id)];
-      lootState.error = '';
-      renderLootPanel();
-      loadLootState();
-    } catch (e) {
-      lootState.error = 'Ролл не принят: возможно, ты уже бросал или время истекло.';
-      renderLootPanel();
-      loadLootState();
-    }
-  }
-
-  function lootServerOffset() {
-    const serverTime = Date.parse(lootState.serverNow || '');
-    return Number.isFinite(serverTime) ? serverTime - Date.now() : 0;
-  }
-
-  function isLootRoundActive(round) {
-    return !!round && round.status === 'active' && Date.parse(round.ends_at) > Date.now() + lootServerOffset();
-  }
-
-  function lootTimeLeft(round) {
-    const seconds = Math.max(0, Math.ceil((Date.parse(round.ends_at) - Date.now() - lootServerOffset()) / 1000));
-    const minutes = Math.floor(seconds / 60);
-    return minutes + ':' + String(seconds % 60).padStart(2, '0');
   }
 
   function scheduleCloudPublish() {
@@ -568,15 +441,10 @@
   }
 
   function nickSet() {
-    const list = [cfg.nick, ...String(cfg.aliases || '').split(/[\s,;]+/)];
     const set = new Set();
-    for (const n of list) {
-      const c = cleanNick(n);
-      if (c) set.add(c);
-    }
-    if (cfg.shared) {
-      for (const key of Object.keys(allSharedPaints())) set.add(key);
-    }
+    const own = cleanNick(cfg.nick);
+    if (own) set.add(own);
+    for (const key of Object.keys(allSharedPaints())) set.add(key);
     return set;
   }
 
@@ -847,223 +715,212 @@
   /* ---------- panel ---------- */
 
   const PANEL_CSS = `
+    :host {
+      --p-paper: #f4efe2;
+      --p-paper-2: #ece4d2;
+      --p-paper-3: #e2d9c2;
+      --p-ink: #1a1712;
+      --p-ink-2: #3d372c;
+      --p-muted: #6b6352;
+      --p-rule: #d8cfba;
+      --p-rule-hi: #b6ab90;
+      --p-accent: #9a3324;
+      --p-accent-ink: #fdf7ec;
+      --p-focus: #9a3324;
+      --p-tile: #191611;
+    }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
+
     .panel {
-      position: fixed; right: 16px; top: 16px; width: 372px;
-      max-height: calc(100vh - 28px); overflow: auto;
-      pointer-events: auto; padding: 16px;
+      position: fixed; right: 16px; top: 16px; width: 366px;
+      max-height: calc(100vh - 28px); overflow: auto; overscroll-behavior: contain;
+      pointer-events: auto; padding: 13px 14px 12px;
       font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      color: #e9e3ff;
-      border-radius: 18px;
-      background: linear-gradient(180deg, rgba(27, 22, 42, .985), rgba(16, 13, 26, .99));
-      border: 1px solid rgba(160, 130, 255, .22);
-      box-shadow: 0 28px 80px rgba(0, 0, 0, .62), inset 0 1px 0 rgba(255, 255, 255, .06);
-      backdrop-filter: blur(14px);
+      color: var(--p-ink);
+      border-radius: 6px;
+      background: var(--p-paper);
+      border: 1px solid var(--p-rule-hi);
+      box-shadow: 0 18px 44px rgba(26, 20, 10, .32), 0 2px 6px rgba(26, 20, 10, .14);
       z-index: 2147483000;
+      scrollbar-width: thin;
+      scrollbar-color: var(--p-rule-hi) transparent;
     }
-    .panel.dragging { box-shadow: 0 34px 90px rgba(0, 0, 0, .7), 0 0 0 1px rgba(180, 139, 255, .4); }
+    .panel.dragging { box-shadow: 0 24px 56px rgba(26, 20, 10, .38), 0 0 0 1px var(--p-accent); }
     .panel::-webkit-scrollbar { width: 8px; }
-    .panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 8px; }
+    .panel::-webkit-scrollbar-thumb { background: var(--p-rule-hi); border-radius: 0; }
+
     .head {
-      display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding-bottom: 7px; margin-bottom: 10px; border-bottom: 1px solid var(--p-rule);
       cursor: grab; user-select: none; touch-action: none;
     }
     .panel.dragging .head { cursor: grabbing; }
-    .logo {
-      width: 30px; height: 30px; flex: none; border-radius: 9px; display: grid; place-items: center;
-      background: linear-gradient(135deg, #7c5cff, #ff5cc8);
-      box-shadow: 0 6px 18px rgba(124, 92, 255, .4);
-      font-size: 15px;
+    .wordmark {
+      font: 600 12px/1 Georgia, "Times New Roman", serif;
+      letter-spacing: .06em; color: var(--p-accent);
     }
-    .titles { flex: 1; min-width: 0; }
-    .title { font-size: 15px; font-weight: 750; letter-spacing: .2px; }
-    .sub { font-size: 11.5px; color: #9a92b8; margin-top: 2px; }
     .x {
-      flex: none; width: 28px; height: 28px; border-radius: 8px; border: 1px solid rgba(255,255,255,.09);
-      background: rgba(255,255,255,.03); color: #b9b0d6; font-size: 15px; line-height: 1; cursor: pointer;
+      flex: none; width: 24px; height: 24px; border-radius: 3px; border: 1px solid var(--p-rule-hi);
+      background: transparent; color: var(--p-ink-2); font-size: 16px; line-height: 1; cursor: pointer;
+      display: grid; place-items: center; padding: 0;
+      transition: background .15s, color .15s, border-color .15s;
     }
-    .x:hover { background: rgba(255,255,255,.09); color: #fff; }
+    .x:hover { background: var(--p-paper-3); color: var(--p-accent); border-color: var(--p-accent); }
+    .x:focus-visible { outline: 2px solid var(--p-focus); outline-offset: 2px; }
+
+    .titles { margin-bottom: 10px; }
+    .title {
+      font: 600 18px/1.2 Georgia, "Times New Roman", serif;
+      letter-spacing: -.1px; overflow-wrap: break-word;
+    }
+    .sub {
+      margin-top: 3px; font-size: 11.5px; color: var(--p-muted);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
 
     .preview {
-      display: grid; place-items: center; min-height: 96px; margin-bottom: 14px; padding: 14px;
-      border-radius: 13px; background:
-        radial-gradient(120% 140% at 50% 0%, rgba(124, 92, 255, .16), transparent 60%),
-        #0d0a17;
-      border: 1px solid rgba(255,255,255,.06);
+      display: grid; place-items: center; min-height: 64px; margin-bottom: 10px; padding: 10px 12px;
+      border-radius: 3px; overflow: hidden;
+      background: var(--p-paper-2);
+      border: 1px solid var(--p-rule);
+      box-shadow: inset 0 1px 3px rgba(26, 20, 10, .09);
     }
-    .pv { font-size: 27px; font-weight: 800; letter-spacing: .2px; }
+    .sec { margin-top: 11px; }
+    .sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+    .sec-t { font-size: 11.5px; color: var(--p-muted); }
+    .val {
+      min-width: 0; font-size: 11px; color: var(--p-ink-2); text-align: right;
+      font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
 
-    .sec { margin-top: 14px; }
-    .sec-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 7px; }
-    .sec-t { font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: #8d84ad; }
-    .val { font-size: 11.5px; color: #b9b0d6; font-variant-numeric: tabular-nums; }
-
-    .paints { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+    .paints { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
     .paint {
-      padding: 0; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; overflow: hidden;
-      background: #15111f; cursor: pointer; text-align: center; color: #b9b0d6;
+      height: 30px; padding: 0; border: 1px solid #2b2519; border-radius: 3px; overflow: hidden;
+      background: var(--p-tile); cursor: pointer; color: var(--p-paper);
+      transition: border-color .15s, background .15s, transform .15s;
     }
-    .paint .chip { height: 30px; display: grid; place-items: center; overflow: hidden; }
+    .paint .chip { height: 100%; display: grid; place-items: center; overflow: hidden; }
     .paint .chip b {
-      max-width: 100%; padding: 0 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-      font-size: 11px; font-weight: 800; letter-spacing: .2px;
+      max-width: 100%; padding: 0 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+      font-size: 8.5px; font-weight: 800; letter-spacing: -.2px;
       background-image: var(--pp); background-size: 200% 100%; background-repeat: repeat-x;
       -webkit-background-clip: text; background-clip: text;
       -webkit-text-fill-color: transparent; color: transparent;
     }
-    .paint.on .chip b { animation: fds-flow-plain 6s linear infinite; }
-    .paint .nm { display: block; font-size: 10px; padding: 3px 2px 4px; }
-    .paint:hover { border-color: rgba(180, 139, 255, .5); }
-    .paint.on { border-color: #b48bff; box-shadow: 0 0 0 1px rgba(180, 139, 255, .55), 0 6px 18px rgba(124, 92, 255, .22); color: #fff; }
-
-    .setup {
-      display: grid; gap: 4px; margin-bottom: 12px; padding: 10px 12px; border-radius: 11px;
-      background: linear-gradient(135deg, rgba(124, 92, 255, .18), rgba(255, 92, 200, .12));
-      border: 1px solid rgba(180, 139, 255, .32); font-size: 11.5px; line-height: 1.45;
+    .paint:hover { border-color: #6b6252; background: #221d15; }
+    .paint:active { transform: scale(.96); }
+    .paint.on {
+      border-color: var(--p-accent);
+      box-shadow: 0 0 0 2px var(--p-accent);
     }
-    .setup b { font-size: 12px; color: #fff; }
-    .setup span { color: #c9c0e4; }
+    .paint.on .chip b { animation: fds-flow-plain 6s linear infinite; }
+    .paint:focus-visible { outline: 2px solid var(--p-focus); outline-offset: 2px; }
 
-    .row { display: flex; align-items: center; gap: 10px; }
+    .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 11px; }
+    .duo .sec { margin-top: 0; }
+
     input[type="range"] {
-      -webkit-appearance: none; appearance: none; width: 100%; height: 22px; background: transparent; cursor: pointer;
+      -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: transparent; cursor: pointer;
     }
     input[type="range"]::-webkit-slider-runnable-track {
-      height: 5px; border-radius: 99px; background: linear-gradient(90deg, #7c5cff, #ff5cc8);
+      height: 3px; background: var(--p-rule-hi);
     }
     input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 15px; height: 15px; margin-top: -5px; border-radius: 50%;
-      background: #fff; border: 2px solid #1a1528; box-shadow: 0 2px 8px rgba(0,0,0,.5);
+      -webkit-appearance: none; width: 11px; height: 11px; margin-top: -4px; border-radius: 1px;
+      background: var(--p-ink); border: 0;
     }
-    input[type="range"]::-moz-range-track {
-      height: 5px; border-radius: 99px; background: linear-gradient(90deg, #7c5cff, #ff5cc8);
-    }
+    input[type="range"]::-moz-range-track { height: 3px; background: var(--p-rule-hi); }
     input[type="range"]::-moz-range-thumb {
-      width: 13px; height: 13px; border-radius: 50%; background: #fff;
-      border: 2px solid #1a1528; box-shadow: 0 2px 8px rgba(0,0,0,.5);
+      width: 11px; height: 11px; border-radius: 1px; background: var(--p-ink); border: 0;
     }
+    input[type="range"]:focus-visible { outline: 2px solid var(--p-focus); outline-offset: 3px; }
 
-    .sw { display: flex; align-items: center; gap: 11px; padding: 7px 0; cursor: pointer; user-select: none; }
-    .sw + .sw { border-top: 1px solid rgba(255,255,255,.045); }
-    .sw input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-    .track {
-      position: relative; flex: none; width: 38px; height: 22px; border-radius: 99px;
-      background: #2a2440; border: 1px solid rgba(255,255,255,.08); transition: background .18s;
+    .checks { margin-top: 12px; border-top: 1px solid var(--p-rule); }
+    .chk {
+      display: flex; align-items: center; gap: 9px; padding: 6px 0;
+      cursor: pointer; user-select: none; border-bottom: 1px solid var(--p-rule);
     }
-    .track::after {
-      content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
-      background: #cfc7e8; transition: transform .18s, background .18s;
+    .chk input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .box {
+      position: relative; flex: none; width: 16px; height: 16px; border-radius: 2px;
+      border: 1px solid var(--p-rule-hi); background: #fffdf6;
+      transition: background .15s, border-color .15s;
     }
-    .sw input:checked + .track { background: linear-gradient(90deg, #7c5cff, #c86bff); }
-    .sw input:checked + .track::after { transform: translateX(16px); background: #fff; }
-    .sw input:focus-visible + .track { outline: 2px solid #b48bff; outline-offset: 2px; }
-    .sw .lbl { font-size: 12.5px; color: #ddd6f2; }
+    .chk:hover .box { border-color: var(--p-ink-2); }
+    .chk input:checked + .box { background: var(--p-accent); border-color: var(--p-accent); }
+    .chk input:checked + .box::after {
+      content: ''; position: absolute; left: 4px; top: 0; width: 4px; height: 9px;
+      border: solid var(--p-accent-ink); border-width: 0 2px 2px 0;
+      transform: rotate(42deg);
+    }
+    .chk input:focus-visible + .box { outline: 2px solid var(--p-focus); outline-offset: 2px; }
+    .chk .lbl { font-size: 12px; color: var(--p-ink-2); }
 
-    .fields { display: grid; gap: 8px; }
-    .field { display: grid; gap: 4px; }
-    .field span { font-size: 11px; color: #8d84ad; }
+    .note { margin: 7px 0 0; font-size: 10.5px; line-height: 1.45; color: var(--p-muted); }
+    .note.ok { color: #4a6b3a; }
+    .note.warn { color: var(--p-accent); }
+    .hint { margin: 0; font-size: 10.5px; line-height: 1.45; color: var(--p-muted); }
+    .hint.ok { color: #4a6b3a; }
+    .hint.warn { color: var(--p-accent); }
+
+    .field { display: grid; gap: 5px; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--p-rule); }
+    .field > span { font-size: 11px; color: var(--p-muted); }
     .field input {
-      width: 100%; padding: 8px 10px; border-radius: 9px; font: inherit; font-size: 12.5px;
-      background: #0e0b18; color: #ece7ff; border: 1px solid rgba(255,255,255,.09); outline: none;
+      width: 100%; padding: 7px 9px; border-radius: 3px; font: inherit; font-size: 12.5px;
+      background: #fffdf6; color: var(--p-ink); border: 1px solid var(--p-rule-hi); outline: none;
+      transition: border-color .15s, box-shadow .15s;
     }
-    .field input:focus { border-color: #b48bff; box-shadow: 0 0 0 3px rgba(180, 139, 255, .14); }
+    .field input:focus { border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(154, 51, 36, .13); }
     .withbtn { display: flex; gap: 6px; }
     .withbtn input { flex: 1; min-width: 0; }
     .mini {
-      flex: none; padding: 0 10px; border-radius: 9px; border: 1px solid rgba(180, 139, 255, .4);
-      background: rgba(124, 92, 255, .16); color: #d9ccff; font: inherit; font-size: 11.5px;
-      font-weight: 650; cursor: pointer; white-space: nowrap;
+      flex: none; min-height: 34px; padding: 0 11px; border-radius: 3px;
+      border: 1px solid var(--p-ink-2); background: transparent; color: var(--p-ink-2);
+      font: inherit; font-size: 11.5px; font-weight: 500; cursor: pointer; white-space: nowrap;
+      transition: background .15s, color .15s, border-color .15s;
     }
-    .mini:hover { background: rgba(124, 92, 255, .28); }
-    .hint2 { font-size: 10.5px; line-height: 1.45; color: #7d7599; }
-    .hint2.ok { color: #8ff0c8; }
-    .hint2.warn { color: #ffb4c8; }
-    .sharedrow { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-    .sharedrow .hint2 { flex: 1; }
+    .mini:hover { background: var(--p-ink); color: var(--p-accent-ink); border-color: var(--p-ink); }
+    .mini:focus-visible { outline: 2px solid var(--p-focus); outline-offset: 2px; }
 
-    .foot { display: flex; gap: 8px; margin-top: 16px; }
+    .foot { display: flex; gap: 8px; margin-top: 12px; }
     .btn {
-      flex: 1; padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.04); color: #d9d2ef; font: inherit; font-weight: 600; cursor: pointer;
+      flex: 1; min-height: 34px; padding: 8px 12px; border-radius: 3px; border: 1px solid var(--p-rule-hi);
+      background: transparent; color: var(--p-ink-2); font: inherit; font-size: 12.5px; font-weight: 500;
+      cursor: pointer; transition: background .15s, border-color .15s, color .15s;
     }
-    .btn:hover { background: rgba(255,255,255,.09); }
+    .btn:hover { background: var(--p-paper-3); border-color: var(--p-ink-2); }
+    .btn:focus-visible { outline: 2px solid var(--p-focus); outline-offset: 2px; }
     .btn.primary {
-      border-color: transparent; color: #170f26;
-      background: linear-gradient(135deg, #c9b3ff, #ff9ede);
-      box-shadow: 0 8px 22px rgba(200, 130, 255, .28);
+      border-color: var(--p-ink); background: var(--p-ink); color: var(--p-accent-ink);
     }
-    .btn.primary:hover { filter: brightness(1.06); }
-    .hint { margin-top: 10px; font-size: 10.5px; line-height: 1.5; color: #7d7599; text-align: center; }
-
-    .loot-launch { width: 100%; margin-top: 12px; }
-    .loot-window { margin-top: 4px; }
-    .loot-card {
-      padding: 13px; border-radius: 13px; background:
-        radial-gradient(120% 140% at 50% 0%, rgba(255, 190, 92, .16), transparent 60%), #0d0a17;
-      border: 1px solid rgba(255,255,255,.08);
-    }
-    .loot-kicker { color: #a99ec8; font-size: 10px; letter-spacing: .8px; text-transform: uppercase; }
-    .loot-item { margin-top: 4px; color: #fff; font-size: 19px; font-weight: 800; overflow-wrap: anywhere; }
-    .loot-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
-    .loot-rarity { display: inline-flex; align-items: center; gap: 5px; color: #ffd166; font-weight: 700; }
-    .loot-rarity::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px currentColor; }
-    .loot-timer { color: #fff; font: 800 17px/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
-    .loot-timer.done { color: #ff9eb8; }
-    .loot-announcement { margin-top: 10px; padding: 9px 10px; border-radius: 9px; color: #f1eaff; background: rgba(124,92,255,.13); border: 1px solid rgba(180,139,255,.2); font-size: 11.5px; line-height: 1.45; }
-    .loot-roll { width: 100%; margin-top: 12px; padding: 13px 14px; border: 0; border-radius: 11px; color: #1b1028; background: linear-gradient(135deg, #ffd166, #ff9ede); box-shadow: 0 9px 24px rgba(255, 172, 100, .23); font: inherit; font-size: 16px; font-weight: 850; cursor: pointer; }
-    .loot-roll:hover { filter: brightness(1.06); }
-    .loot-roll:disabled { opacity: .52; cursor: not-allowed; filter: none; }
-    .loot-empty { padding: 20px 8px; color: #aaa0c4; text-align: center; line-height: 1.55; }
-    .loot-journal { display: grid; gap: 5px; margin-top: 13px; max-height: 180px; overflow: auto; }
-    .loot-roll-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; background: rgba(255,255,255,.045); }
-    .loot-roll-row .loot-nick { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ddd6f2; }
-    .loot-roll-row .loot-value { color: #ffd166; font: 800 14px/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
-    .loot-owner { display: grid; gap: 8px; margin-top: 13px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.07); }
-    .loot-owner-title { color: #cfc3ef; font-size: 11px; font-weight: 750; letter-spacing: .4px; }
-    .loot-owner-actions { display: flex; gap: 6px; }
-    .loot-owner-actions .mini { flex: 1; min-height: 30px; }
-    .loot-owner-login { width: 100%; }
-    .loot-error { margin-top: 8px; color: #ffb4c8; font-size: 11px; line-height: 1.4; }
-    .loot-back { margin-top: 12px; }
-    .rarity-grey { color: #b8b8c4; } .rarity-unusual { color: #6ee7a1; } .rarity-rare { color: #69a7ff; }
-    .rarity-epic { color: #c78bff; } .rarity-legendary { color: #ffad5c; } .rarity-mythic { color: #ff6b9d; }
+    .btn.primary:hover { background: #2b2519; border-color: #2b2519; }
 
     .bubble {
       position: fixed; right: 16px; top: 16px; z-index: 2147483000;
-      width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%;
+      width: 38px; height: 38px; padding: 0; border: 0; border-radius: 10px;
       background: transparent; pointer-events: auto; cursor: grab;
       touch-action: none; user-select: none; -webkit-tap-highlight-color: transparent;
-    }
-    .bubble .halo {
-      position: absolute; inset: -7px; border-radius: 50%; z-index: 0;
-      background: conic-gradient(from 0deg, #6ef3ff, #7c5cff, #ff5cc8, #ffd166, #6ef3ff);
-      filter: blur(9px); opacity: .55; animation: fds-spin 9s linear infinite;
+      opacity: .58; transition: opacity .18s ease, transform .18s ease;
     }
     .bubble .ball {
-      position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%;
-      display: grid; place-items: center;
-      background: radial-gradient(120% 120% at 30% 20%, #c9b3ff, #7c5cff 48%, #c44dff 78%, #ff5cc8);
-      border: 1px solid rgba(255,255,255,.36);
-      box-shadow: 0 14px 34px rgba(110, 70, 255, .5), inset 0 1px 0 rgba(255,255,255,.35);
-      transition: transform .16s, box-shadow .16s;
+      width: 100%; height: 100%; border-radius: 10px; display: grid; place-items: center;
+      background: #f4efe2; border: 1px solid #c9bfa8;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .7);
+      transition: border-color .18s ease, box-shadow .18s ease;
     }
-    .bubble .bicon {
-      width: 31px; height: 31px; color: #fff; filter: drop-shadow(0 1px 3px rgba(20, 8, 40, .55));
-    }
-    .bubble .bicon svg { display: block; width: 100%; height: 100%; overflow: visible; }
-    .bubble .bicon .helmet-shine { opacity: .8; }
-    .bubble .bicon .helmet-shadow { opacity: .24; }
-    .bubble .bicon .helmet-crest { fill: #ffe7a3; stroke: #fff6d1; }
+    .bubble .cat { width: 21px; height: 21px; color: #2a2418; transition: color .18s ease; }
+    .bubble .cat svg { display: block; width: 100%; height: 100%; }
+    .bubble:hover { opacity: 1; transform: translateY(-1px); }
+    .bubble:hover .cat { color: var(--p-accent); }
     .bubble:hover .ball {
-      transform: scale(1.06);
-      box-shadow: 0 18px 44px rgba(140, 90, 255, .66), inset 0 1px 0 rgba(255,255,255,.45);
+      border-color: var(--p-accent);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, .44), inset 0 1px 0 rgba(255, 255, 255, .8);
     }
-    .bubble:active .ball, .bubble.dragging .ball { transform: scale(.98); }
-    .bubble.dragging { cursor: grabbing; }
-    .bubble.off .ball { filter: grayscale(.72) brightness(.82); }
-    .bubble:focus-visible { outline: 2px solid #d9ccff; outline-offset: 4px; }
-    @keyframes fds-spin { to { transform: rotate(360deg); } }
+    .bubble:active .ball, .bubble.dragging .ball { transform: scale(.95); }
+    .bubble.dragging { cursor: grabbing; opacity: 1; }
+    .bubble.off .cat { opacity: .35; }
+    .bubble:focus-visible { opacity: 1; outline: 2px solid var(--p-focus); outline-offset: 3px; }
 
     @keyframes fds-flow {
       0%   { background-position: -183.333% 50%, 0% 50%; }
@@ -1074,7 +931,9 @@
       100% { background-position: 200% 50%; }
     }
     .pv {
-      background-image: var(--fds-shine, linear-gradient(90deg, rgba(255,255,255,0) 40%, rgba(255,255,255,.62) 50%, rgba(255,255,255,0) 60%)), var(--fds-grad);
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 27px; font-weight: 800; letter-spacing: .2px;
+      background-image: var(--fds-shine, linear-gradient(90deg, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, .62) 50%, rgba(255, 255, 255, 0) 60%)), var(--fds-grad);
       background-size: 70% 100%, 200% 100%;
       background-repeat: repeat-x, repeat-x;
       background-position: -183.333% 50%, 0% 50%;
@@ -1082,25 +941,31 @@
       -webkit-text-fill-color: transparent; color: transparent;
       animation: fds-flow var(--fds-speed, 8s) linear infinite;
       animation-delay: var(--fds-delay, 0s);
-      text-shadow: 0 0 var(--fds-glow, 7px) rgba(var(--fds-glowcol, 124,140,255), .55);
+      text-shadow: 0 0 var(--fds-glow, 7px) rgba(var(--fds-glowcol, 124, 140, 255), .55);
     }
     .pv.no-shine {
       background-image: var(--fds-grad); background-size: 200% 100%; background-position: 0% 50%;
       animation-name: fds-flow-plain;
     }
     .pv.off {
-      background: none; -webkit-text-fill-color: currentColor; color: #9a92b8;
+      background: none; -webkit-text-fill-color: currentColor; color: var(--p-muted);
       animation: none; filter: none; text-shadow: none;
     }
-    @media (prefers-reduced-motion: reduce) { .pv { animation: none; } }
-    @media (max-width: 460px) { .panel { width: calc(100vw - 20px); } }
+    @media (prefers-reduced-motion: reduce) {
+      .pv, .paint.on .chip b { animation: none; }
+      .paint, .btn, .mini, .x, .bubble, .bubble .ball, .bubble .cat, .box, .field input { transition: none; }
+      .paint:active { transform: none; }
+      .bubble:hover { transform: none; }
+    }
+    @media (max-width: 460px) {
+      .panel { width: calc(100vw - 20px); right: 10px; top: 10px; }
+    }
   `;
 
   let host = null;
   let shadow = null;
-  let lootOpen = false;
 
-  const BUBBLE_SIZE = 56;
+  const BUBBLE_SIZE = 38;
 
   function clampNum(value, min, max) {
     return Math.min(Math.max(value, min), max);
@@ -1187,88 +1052,6 @@
     handle.addEventListener('pointercancel', end);
   }
 
-  function lootRarityClass(rarity) {
-    return {
-      серая: 'rarity-grey', необычная: 'rarity-unusual', редкая: 'rarity-rare',
-      эпическая: 'rarity-epic', легендарная: 'rarity-legendary', мифическая: 'rarity-mythic',
-    }[rarity] || '';
-  }
-
-  function isOwnLootRoll(round) {
-    const userId = cloudSession && cloudSession.user && cloudSession.user.id;
-    return !!userId && lootState.rolls.some((row) => row.round_id === round.id && row.user_id === userId);
-  }
-
-  function lootAnnouncement(round) {
-    if (!round) return '';
-    return 'ВНИМАНИЕ ЛЕГИОН! На разролле предмет «' + round.item_name + '», редкость: ' + round.rarity + '. Кидайте свой ролл на удачу.';
-  }
-
-  function renderLootPanel() {
-    if (!shadow) return;
-    const windowEl = shadow.getElementById('fdsLootWindow');
-    if (!windowEl) return;
-    const round = lootState.round;
-    const owner = isLootOwner();
-    const empty = !round;
-    windowEl.hidden = !lootOpen;
-    shadow.getElementById('fdsMainWindow').hidden = lootOpen;
-    shadow.getElementById('fdsLootOwner').hidden = !owner || empty;
-    shadow.getElementById('fdsLootError').textContent = lootState.error || '';
-    shadow.getElementById('fdsLootError').hidden = !lootState.error;
-    if (empty) {
-      shadow.getElementById('fdsLootBody').innerHTML = '<div class="loot-empty">Сейчас нет активного разролла.<br>Когда владелец создаст предмет, он появится здесь у всех участников.</div>';
-      shadow.getElementById('fdsLootOwner').hidden = !owner;
-      return;
-    }
-    const active = isLootRoundActive(round);
-    const ownRoll = isOwnLootRoll(round);
-    const rarityClass = lootRarityClass(round.rarity);
-    const rows = lootState.rolls.map((row) =>
-      '<div class="loot-roll-row"><span class="loot-nick">' + escapeHtml(row.nick) + '</span><span class="loot-value">' + Number(row.roll) + '</span></div>'
-    ).join('');
-    shadow.getElementById('fdsLootBody').innerHTML =
-      '<div class="loot-card">' +
-        '<div class="loot-kicker" id="fdsLootKicker">' + (active ? 'Текущий предмет' : 'Разролл завершён') + '</div>' +
-        '<div class="loot-item">' + escapeHtml(round.item_name) + '</div>' +
-        '<div class="loot-meta"><span class="loot-rarity ' + rarityClass + '">' + escapeHtml(round.rarity) + '</span>' +
-          '<span class="loot-timer ' + (active ? '' : 'done') + '">' + (active ? lootTimeLeft(round) : 'завершён') + '</span></div>' +
-        '<button class="loot-roll" type="button" id="fdsLootRoll" ' + ((!active || ownRoll) ? 'disabled' : '') + '>' + (ownRoll ? 'Ты уже роллил: ' + Number(lootState.rolls.find((row) => row.user_id === cloudSession.user.id && row.round_id === round.id).roll) : (active ? 'Роллить' : 'Время истекло')) + '</button>' +
-      '</div>' +
-      '<div class="sec"><div class="sec-h"><span class="sec-t">Журнал роллов</span><span class="val">' + lootState.rolls.length + '</span></div>' +
-        '<div class="loot-journal">' + (rows || '<div class="hint2">Пока никто не роллил.</div>') + '</div></div>';
-    const rollButton = shadow.getElementById('fdsLootRoll');
-    if (rollButton) rollButton.addEventListener('click', rollLoot);
-    if (round.id !== lootAnnouncementId) {
-      lootAnnouncementId = round.id;
-      shadow.getElementById('fdsLootNotice').textContent = lootAnnouncement(round);
-      shadow.getElementById('fdsLootNotice').hidden = false;
-    }
-    shadow.getElementById('fdsLootOwner').hidden = !owner;
-    syncLootTimer();
-  }
-
-  function escapeHtml(value) {
-    return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-  }
-
-  function syncLootTimer() {
-    if (!lootOpen || !lootState.round || !shadow) return;
-    const active = isLootRoundActive(lootState.round);
-    const timer = shadow.querySelector('.loot-timer');
-    if (!timer) return;
-    const next = active ? lootTimeLeft(lootState.round) : 'завершён';
-    if (timer.textContent !== next) timer.textContent = next;
-    timer.classList.toggle('done', !active);
-    const kicker = shadow.getElementById('fdsLootKicker');
-    if (kicker) kicker.textContent = active ? 'Текущий предмет' : 'Разролл завершён';
-
-    const rollButton = shadow.getElementById('fdsLootRoll');
-    if (!rollButton || isOwnLootRoll(lootState.round)) return;
-    rollButton.disabled = !active;
-    rollButton.textContent = active ? 'Роллить' : 'Время истекло';
-  }
-
   function buildPanel() {
     if (host) return;
     host = document.createElement('div');
@@ -1277,103 +1060,72 @@
     shadow.innerHTML = '<style>' + PANEL_CSS + '</style>' + `
       <section class="panel" role="dialog" aria-label="Переливание ника" hidden>
         <div class="head" id="fdsDrag">
-          <div class="logo">✦</div>
-          <div class="titles">
-            <div class="title">Гильдейское расширение</div>
-            <div class="sub" id="fdsSub">Переливание ника · твой ник</div>
-          </div>
-          <button class="x" type="button" data-close aria-label="Свернуть в кружок" title="Свернуть в кружок">✕</button>
+          <span class="wordmark">Легион</span>
+          <button class="x" type="button" data-close aria-label="Свернуть в кружок" title="Свернуть в кружок">×</button>
         </div>
 
-          <div id="fdsMainWindow">
-          <div class="setup" id="fdsSetup">
-            <b>Сначала впиши свой ник</b>
-            <span>Переливка включается только для указанного ника и работает у каждого в его браузере.</span>
-          </div>
+        <div class="titles">
+          <div class="title">Переливание ника</div>
+          <div class="sub" id="fdsSub">Ник не выбран</div>
+        </div>
 
-          <div class="preview"><span class="pv" id="fdsPv">твой ник</span></div>
+        <div class="preview"><span class="pv" id="fdsPv">твой ник</span></div>
 
-          <div class="sec">
-            <div class="sec-h"><span class="sec-t">Переливашка</span><span class="val" id="fdsPaintName">Аврора</span></div>
-            <div class="paints" id="fdsPaints"></div>
-          </div>
+        <div class="sec">
+          <div class="sec-h"><span class="sec-t">Краска</span><span class="val" id="fdsPaintName">Аврора</span></div>
+          <div class="paints" id="fdsPaints" role="group" aria-label="Краски"></div>
+        </div>
 
+        <div class="duo">
           <div class="sec">
             <div class="sec-h"><span class="sec-t">Скорость</span><span class="val" id="fdsSpeedV">8 с</span></div>
             <input type="range" id="fdsSpeed" min="3" max="20" step="1" value="8" aria-label="Скорость переливания">
           </div>
-
           <div class="sec">
             <div class="sec-h"><span class="sec-t">Свечение</span><span class="val" id="fdsGlowV">7 px</span></div>
             <input type="range" id="fdsGlow" min="0" max="16" step="1" value="7" aria-label="Сила свечения">
           </div>
+        </div>
 
-          <div class="sec">
-            <label class="sw"><input type="checkbox" id="fdsShine"><span class="track"></span><span class="lbl">Блик поверх краски</span></label>
-            <label class="sw"><input type="checkbox" id="fdsMentions"><span class="track"></span><span class="lbl">Подсвечивать @упоминания</span></label>
-            <label class="sw"><input type="checkbox" id="fdsEnabled"><span class="track"></span><span class="lbl">Включено</span></label>
-            <label class="sw"><input type="checkbox" id="fdsShared"><span class="track"></span><span class="lbl">Красить общий список гильдии</span></label>
-          </div>
-          <div class="sharedrow">
-            <span class="hint2" id="fdsSharedInfo">Общий список: …</span>
-            <button class="mini" type="button" id="fdsSharedReload" title="Обновить общий список">↻</button>
-          </div>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" id="fdsShine"><span class="box"></span><span class="lbl">Блик поверх краски</span></label>
+          <label class="chk"><input type="checkbox" id="fdsMentions"><span class="box"></span><span class="lbl">Подсвечивать @упоминания</span></label>
+          <label class="chk"><input type="checkbox" id="fdsEnabled"><span class="box"></span><span class="lbl">Включено</span></label>
+        </div>
+        <p class="note" id="fdsSharedInfo">Гильдейский список: …</p>
 
-          <div class="sec fields">
-            <div class="field">
-              <span>Чей ник переливается</span>
-              <div class="withbtn">
-                <input id="fdsNick" type="text" spellcheck="false" autocomplete="off" placeholder="твой ник в чате">
-                <button class="mini" type="button" id="fdsPickMe">Мой ник</button>
-              </div>
-              <div class="hint2" id="fdsNickHint">Впиши ник из чата. У каждого в браузере свой — скрипт можно передать друзьям.</div>
-            </div>
-            <label class="field"><span>Доп. ники через запятую</span><input id="fdsAliases" type="text" spellcheck="false" autocomplete="off" placeholder="твинк, второй_ник"></label>
+        <div class="field">
+          <span>Чей ник переливается</span>
+          <div class="withbtn">
+            <input id="fdsNick" type="text" spellcheck="false" autocomplete="off" placeholder="твой ник в чате">
+            <button class="mini" type="button" id="fdsPickMe">Мой ник</button>
           </div>
+          <p class="hint" id="fdsNickHint">Впиши ник из чата или нажми «Мой ник».</p>
+        </div>
 
-          <div class="foot">
-            <button class="btn" type="button" id="fdsReset">Сбросить</button>
-            <button class="btn primary" type="button" data-close>Готово</button>
-          </div>
-          <button class="btn loot-launch" type="button" id="fdsLootOpen">🎲 Распределение лута</button>
-          <div class="hint">Работает только у тебя в браузере · Alt+Shift+F</div>
-          </div>
+        <div class="foot">
+          <button class="btn" type="button" id="fdsReset">Сбросить</button>
+          <button class="btn primary" type="button" data-close>Готово</button>
+        </div>
+      </section>
 
-          <div class="loot-window" id="fdsLootWindow" hidden>
-            <div class="sec-h"><span class="sec-t">Распределение лута</span><span class="val">общий раунд</span></div>
-            <div class="loot-announcement" id="fdsLootNotice" hidden></div>
-            <div id="fdsLootBody"><div class="loot-empty">Загружаю состояние разролла…</div></div>
-            <div class="loot-owner" id="fdsLootOwner" hidden>
-              <div class="loot-owner-title">Новый предмет</div>
-              <div class="field"><span>Название</span><input id="fdsLootItem" type="text" maxlength="160" placeholder="Название предмета"></div>
-              <div class="field"><span>Редкость</span><select id="fdsLootRarity">${LOOT_RARITIES.map((rarity) => '<option value="' + rarity + '">' + rarity + '</option>').join('')}</select></div>
-              <div class="field"><span>Таймер, секунд</span><input id="fdsLootDuration" type="number" min="10" max="86400" step="1" value="120"></div>
-              <div class="loot-owner-actions"><button class="mini" type="button" id="fdsLootCreate">Создать</button><button class="mini" type="button" id="fdsLootFinish">Завершить</button><button class="mini" type="button" id="fdsLootClear">Очистить журнал</button></div>
-            </div>
-            <div class="loot-error" id="fdsLootError" hidden></div>
-            <button class="btn loot-back" type="button" id="fdsLootBack">← К настройкам</button>
-          </div>
-        </section>
-       <button class="bubble" type="button" hidden aria-label="Открыть настройки переливания" title="Переливание ника · настройки">
-         <span class="halo"></span>
-         <span class="ball"><span class="bicon" aria-hidden="true">
-           <svg viewBox="0 0 48 48" role="img" aria-label="Легионерский шлем">
-             <path d="M9 28c0-10.8 6.7-18 15-18s15 7.2 15 18v6H9z" fill="#dfe7ff" stroke="#fff" stroke-width="1.5"/>
-             <path class="helmet-shadow" d="M9 28h30v6H9zM14 18c3-4 6.3-5.8 10-5.8V34H14z" fill="#7f8fc5"/>
-             <path d="M7 27h34v7H7z" fill="#b9c8f5" stroke="#fff" stroke-width="1.5"/>
-             <path d="M11 34v5h8v-5m10 0v5h8v-5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-             <path class="helmet-crest" d="M24 4l3 7h-6z" stroke-width="1"/>
-             <path class="helmet-shine" d="M15 16c2.2-2.2 4.8-3.4 7.4-3.8" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-           </svg>
-         </span></span>
+      <button class="bubble" type="button" hidden aria-label="Открыть настройки переливания" title="Переливание ника">
+        <span class="ball"><span class="cat" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" focusable="false">
+            <path d="M4.6 10.1 4 4.9c-.05-.55.55-.85.99-.52l3.2 2.4a9.9 9.9 0 0 1 7.62 0l3.2-2.4c.44-.33 1.04-.03.99.52l-.6 5.2c.66 1.1 1.02 2.35 1.02 3.6 0 4.2-3.7 6.7-8.42 6.7S3.58 17.9 3.58 13.7c0-1.25.36-2.5 1.02-3.6Z" fill="currentColor"/>
+            <circle cx="9.5" cy="12.1" r="1.15" fill="#f4efe2"/>
+            <circle cx="14.5" cy="12.1" r="1.15" fill="#f4efe2"/>
+            <path d="M11.3 14.4h1.4L12 15.5Z" fill="#f4efe2"/>
+          </svg>
+        </span></span>
       </button>
     `;
     document.documentElement.appendChild(host);
 
     shadow.getElementById('fdsPaints').innerHTML = PAINTS.map((p) =>
-      '<button class="paint" type="button" data-paint="' + p.id + '" style="--pp:' + gradientOf(p) + '">' +
-        '<span class="chip"><b>ник</b></span>' +
-        '<span class="nm">' + p.name + '</span>' +
+      '<button class="paint" type="button" data-paint="' + p.id + '" style="--pp:' + gradientOf(p) + '"' +
+        ' title="' + p.name + '" aria-label="' + p.name + '" aria-pressed="false">' +
+        '<span class="chip"><b aria-hidden="true">' + p.name + '</b></span>' +
       '</button>'
     ).join('');
 
@@ -1436,24 +1188,6 @@
       if (shadow) syncPanel();
     });
 
-    shadow.getElementById('fdsShared').addEventListener('change', (e) => {
-      cfg.shared = e.target.checked;
-      saveCfg();
-      refresh();
-      if (cfg.shared) {
-        loadShared(false);
-        scheduleCloudPublish();
-      } else {
-        sharedState = 'off';
-        updateSharedInfo();
-      }
-      syncPanel();
-    });
-
-    shadow.getElementById('fdsSharedReload').addEventListener('click', () => {
-      if (cfg.shared) loadShared(true);
-    });
-
     const nick = shadow.getElementById('fdsNick');
     nick.addEventListener('input', () => {
       cfg.nick = nick.value.trim();
@@ -1488,13 +1222,6 @@
       scheduleCloudPublish();
     });
 
-    const aliases = shadow.getElementById('fdsAliases');
-    aliases.addEventListener('input', () => {
-      cfg.aliases = aliases.value;
-      saveCfg();
-      refresh();
-    });
-
     shadow.getElementById('fdsReset').addEventListener('click', () => {
       const keepNick = cfg.nick;
       Object.assign(cfg, DEFAULTS);
@@ -1506,33 +1233,17 @@
       syncPanel();
       scheduleCloudPublish();
     });
-
-    shadow.getElementById('fdsLootOpen').addEventListener('click', () => {
-      lootOpen = true;
-      renderLootPanel();
-      loadLootState();
-    });
-    shadow.getElementById('fdsLootBack').addEventListener('click', () => {
-      lootOpen = false;
-      renderLootPanel();
-    });
-    shadow.getElementById('fdsLootCreate').addEventListener('click', createLootRound);
-    shadow.getElementById('fdsLootFinish').addEventListener('click', finishLootRound);
-    shadow.getElementById('fdsLootClear').addEventListener('click', clearLootRolls);
-    renderLootPanel();
   }
 
   function syncNickUi() {
     if (!shadow) return;
     const label = cfg.nick || PLACEHOLDER;
-    shadow.querySelectorAll('[data-paint] .chip b').forEach((el) => { el.textContent = label; });
-    shadow.getElementById('fdsSub').textContent = 'Переливание ника · ' + label;
+    shadow.getElementById('fdsSub').textContent = cfg.nick ? 'Ник: ' + cfg.nick : 'Ник не выбран';
     shadow.getElementById('fdsPv').textContent = label;
-    shadow.getElementById('fdsSetup').hidden = !!cfg.nick;
     const hint = shadow.getElementById('fdsNickHint');
     hint.textContent = cfg.nick
-      ? 'Готово: переливается ник «' + cfg.nick + '». У каждого в браузере свой — скрипт можно передать друзьям.'
-      : 'Впиши ник из чата или нажми «Мой ник». У каждого в браузере свой — скрипт можно передать друзьям.';
+      ? 'Переливается ник «' + cfg.nick + '».'
+      : 'Впиши ник из чата или нажми «Мой ник».';
     hint.classList.toggle('ok', !!cfg.nick);
     hint.classList.toggle('warn', !cfg.nick);
   }
@@ -1551,26 +1262,20 @@
     if (!el) return;
     const count = Object.keys(allSharedPaints()).length;
     el.classList.remove('ok', 'warn');
-    if (!cfg.shared) {
-      el.textContent = 'Общий список выключен';
-      return;
-    }
     if (sharedState === 'loading' || cloudState === 'loading') {
-      el.textContent = 'Общий список: загружаю…';
+      el.textContent = 'Гильдейский список: загружаю…';
       return;
     }
     if (sharedState === 'error' && !count) {
-      el.textContent = count
-        ? 'Общий список: ' + count + ' ' + plural(count, 'ник', 'ника', 'ников') + ' (из кэша, нет связи)'
-        : 'Общий список не загрузился';
+      el.textContent = 'Гильдейский список не загрузился';
       el.classList.add('warn');
       return;
     }
     if (count) {
-      el.textContent = 'Общий список: ' + count + ' ' + plural(count, 'ник', 'ника', 'ников');
+      el.textContent = 'Гильдейский список: ' + count + ' ' + plural(count, 'ник', 'ника', 'ников');
       el.classList.add(cloudState === 'error' ? 'warn' : 'ok');
     } else {
-      el.textContent = 'Общий список пуст';
+      el.textContent = 'Гильдейский список пуст';
     }
   }
 
@@ -1578,7 +1283,9 @@
     if (!shadow) return;
     const paint = currentPaint();
     shadow.querySelectorAll('[data-paint]').forEach((b) => {
-      b.classList.toggle('on', b.dataset.paint === cfg.paint);
+      const on = b.dataset.paint === cfg.paint;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
     });
     shadow.getElementById('fdsPaintName').textContent = paint.name;
     syncNickUi();
@@ -1589,14 +1296,11 @@
     shadow.getElementById('fdsShine').checked = !!cfg.shine;
     shadow.getElementById('fdsMentions').checked = !!cfg.mentions;
     shadow.getElementById('fdsEnabled').checked = !!cfg.enabled;
-    shadow.getElementById('fdsShared').checked = !!cfg.shared;
     shadow.getElementById('fdsNick').value = cfg.nick;
-    shadow.getElementById('fdsAliases').value = cfg.aliases;
     shadow.getElementById('fdsPv').classList.toggle('off', !cfg.enabled);
     shadow.getElementById('fdsPv').classList.toggle('no-shine', !cfg.shine);
     syncBubble();
     updateSharedInfo();
-    renderLootPanel();
   }
 
   function openPanel() {
@@ -1607,6 +1311,7 @@
     panel.hidden = false;
     syncPanel();
     placePanel();
+    if (!cfg.nick) shadow.getElementById('fdsNick').focus();
   }
 
   function closePanel() {
@@ -1647,13 +1352,12 @@
     }
     refresh();
     loadShared(false);
-    if (!TEST && cfg.shared) {
+    if (!TEST) {
       cloudState = 'loading';
       updateSharedInfo();
       loadCloudPaints();
       scheduleCloudPublish();
     }
-    if (!TEST) loadLootState();
     if (firstRun || !cfg.nick) {
       if (firstRun) {
         cfg.asked = true;
@@ -1665,13 +1369,8 @@
     }
     setInterval(() => { if (!document.hidden && cfg.enabled) scan(); }, 2500);
     cloudSyncInterval = window.setInterval(() => {
-      if (cfg.shared && !document.hidden) loadCloudPaints();
+      if (!document.hidden) loadCloudPaints();
     }, CLOUD_POLL_MS);
-    lootTimer = window.setInterval(() => {
-      lootTimerTicks += 1;
-      syncLootTimer();
-    }, 1000);
-    startLootSync();
     const mo = new MutationObserver(schedule);
     mo.observe(document.documentElement, {
       childList: true,
@@ -1726,13 +1425,5 @@
     applyVars,
     paints: PAINTS,
     PAINTS,
-    loot: {
-      setState: (payload) => applyLootState(payload),
-      open: () => { lootOpen = true; renderLootPanel(); },
-      close: () => { lootOpen = false; renderLootPanel(); },
-      syncTimer: syncLootTimer,
-      timerTicks: () => lootTimerTicks,
-      state: () => lootState,
-    },
   };
 })();

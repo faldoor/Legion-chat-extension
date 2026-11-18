@@ -1,6 +1,19 @@
 <!doctype html>
 <html lang="ru">
-<head><meta charset="utf-8"><title>Legion userscript UI tests</title></head>
+<head>
+  <meta charset="utf-8">
+  <title>Legion userscript UI tests</title>
+  <style>
+    body { margin: 0; min-height: 100vh; background: #12101a; font: 13px/1.5 system-ui, sans-serif; color: #cfc8e6; }
+    .cy-chat { margin: 24px; padding: 0; list-style: none; }
+    .cy-chat-l { display: grid; gap: 6px; padding: 14px; border-radius: 10px; background: #1b1726; }
+    .cy-chat-l li { color: #b9b1d0; }
+    .cy-chat-l b { color: #ece7ff; }
+    #out { position: fixed; left: 12px; bottom: 12px; max-width: 44ch; margin: 0; padding: 10px 12px;
+      border-radius: 8px; background: rgba(0, 0, 0, .72); color: #b9f5d8; font: 11px/1.45 ui-monospace, monospace;
+      white-space: pre-wrap; pointer-events: none; }
+  </style>
+</head>
 <body>
 <ul class="cy-chat"><ol class="cy-chat-l">
   <li><b data-nick="faldoorch">faldoorch</b> <span>тест</span></li>
@@ -11,111 +24,126 @@
   const mem = {};
   window.GM_getValue = (key, fallback) => (key in mem ? mem[key] : fallback);
   window.GM_setValue = (key, value) => { mem[key] = value; };
-   window.GM_registerMenuCommand = () => {};
-   window.__FDS_TEST__ = true;
-   window.__FDS_WEBSOCKET_ATTEMPTS__ = 0;
-   window.WebSocket = function () {
-     window.__FDS_WEBSOCKET_ATTEMPTS__ += 1;
-     throw new Error('WebSocket must not be used by the userscript');
-   };
-   mem.fds_cfg_v1 = JSON.stringify({ shared: false });
+  window.GM_registerMenuCommand = () => {};
+  window.__FDS_TEST__ = true;
+  window.__FDS_WEBSOCKET_ATTEMPTS__ = 0;
+  window.WebSocket = function () {
+    window.__FDS_WEBSOCKET_ATTEMPTS__ += 1;
+    throw new Error('WebSocket must not be used by the userscript');
+  };
+  mem.fds_cfg_v1 = JSON.stringify({ shared: false, nick: 'pupok309' });
 </script>
 <script src="../legion-guild.user.js"></script>
 <script>
 setTimeout(() => {
   const rows = [];
   const ok = (name, condition) => rows.push((condition ? 'OK   ' : 'FAIL ') + name);
+  const finish = () => {
+    document.getElementById('out').textContent =
+      rows.join('\n') + '\n\nитог: ' + rows.filter((row) => row.startsWith('OK')).length + '/' + rows.length + ' OK';
+  };
   try {
     const model = window.FaldoorchShimmer;
     model.open();
     const shadow = document.getElementById('fds-host').shadowRoot;
-     ok('loot window exists', !!shadow.getElementById('fdsLootWindow'));
-     ok('owner hint is removed', !shadow.textContent.includes('Управление владельца') && !shadow.textContent.includes('Укажи ник faldoorch'));
-     ok('CSP-safe mode does not open WebSocket', window.__FDS_WEBSOCKET_ATTEMPTS__ === 0);
-    ok('menu uses legionnaire helmet SVG', !!shadow.querySelector('.bubble .bicon svg .helmet-crest'));
+    const bubble = () => shadow.querySelector('.bubble');
+    const panel = () => shadow.querySelector('.panel');
+    const text = shadow.textContent;
+
+    /* --- палитра --- */
+    ok('40 redraw paints', model.PAINTS.length === 40);
+    ok('paint ids are unique', new Set(model.PAINTS.map((p) => p.id)).size === 40);
+    ok('every paint has >= 2 colors', model.PAINTS.every((p) => Array.isArray(p.colors) && p.colors.length >= 2));
+    const lists = model.PAINTS.map((p) => p.colors.map((c) => c.toLowerCase()).join(','));
+    ok('no paint repeats another paint', new Set(lists).size === 40);
+    const rgb = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+    const gap = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const nearest = (a, b) => a.reduce((sum, c) => sum + Math.min(...b.map((x) => gap(c, x))), 0) / a.length;
+    const dist = (a, b) => Math.max(nearest(a, b), nearest(b, a));
+    const palettes = model.PAINTS.map((p) => p.colors.map(rgb));
+    let closest = Infinity;
+    let closestPair = '';
+    for (let i = 0; i < palettes.length; i += 1) {
+      for (let j = i + 1; j < palettes.length; j += 1) {
+        const d = dist(palettes[i], palettes[j]);
+        if (d < closest) { closest = d; closestPair = model.PAINTS[i].name + ' / ' + model.PAINTS[j].name; }
+      }
+    }
+    ok('paints read apart [' + closest.toFixed(0) + ' — ' + closestPair + ']', closest >= 32);
+    const swatches = shadow.querySelectorAll('[data-paint]');
+    ok('panel renders 40 swatches [' + swatches.length + ']', swatches.length === 40);
+    ok('swatches show paint names', shadow.querySelector('[data-paint] .chip b').textContent === model.PAINTS[0].name);
+    ok('every swatch has its own name',
+      new Set([...shadow.querySelectorAll('[data-paint] .chip b')].map((el) => el.textContent)).size === 40);
+    const grid = shadow.getElementById('fdsPaints');
+    ok('paint grid fits its column [' + grid.scrollWidth + ' <= ' + grid.clientWidth + ']',
+      grid.scrollWidth <= grid.clientWidth + 1);
+
+    /* --- выбор краски --- */
+    const target = swatches[7];
+    target.click();
+    ok('click selects paint [' + model.cfg.paint + ']', model.cfg.paint === target.dataset.paint);
+    ok('selected swatch is pressed', target.getAttribute('aria-pressed') === 'true');
+    ok('only one swatch is selected', shadow.querySelectorAll('[data-paint][aria-pressed="true"]').length === 1);
+    ok('paint name shows in header', shadow.getElementById('fdsPaintName').textContent ===
+      model.PAINTS.find((p) => p.id === target.dataset.paint).name);
+
+    /* --- лут удалён --- */
+    ok('no loot controls', !shadow.getElementById('fdsLootWindow') && !shadow.getElementById('fdsLootBody'));
+    ok('no loot wording', !/разролл|роллить|ВНИМАНИЕ ЛЕГИОН/i.test(text));
+    ok('no loot api', !('loot' in model) || model.loot === undefined);
+
+    /* --- доп. ники и подпись убраны --- */
+    ok('no aliases field', !shadow.getElementById('fdsAliases'));
+    ok('no aliases in config', model.cfg.aliases === undefined);
+    ok('no shared-list toggle', !shadow.getElementById('fdsShared') && !shadow.getElementById('fdsSharedReload'));
+    ok('no browser-only caption', !/Работает только у тебя в браузере/.test(text));
+    ok('no setup block', !shadow.getElementById('fdsSetup'));
+
+    /* --- ник и превью --- */
+    ok('preview shows configured nick [' + shadow.getElementById('fdsPv').textContent + ']',
+      shadow.getElementById('fdsPv').textContent === 'pupok309');
+    ok('subtitle shows nick', shadow.getElementById('fdsSub').textContent.includes('pupok309'));
+    if (innerHeight >= 880) {
+      ok('panel fits the viewport [' + panel().scrollHeight + '/' + panel().clientHeight + ']',
+        panel().scrollHeight <= panel().clientHeight + 1);
+    }
+    ok('panel content fits 900px screen [' + panel().scrollHeight + ' px]', panel().scrollHeight <= 876);
+    ok('panel stays inside the viewport [' + document.documentElement.clientWidth + ' px]',
+      panel().getBoundingClientRect().right <= document.documentElement.clientWidth + 1);
+    shadow.getElementById('fdsNick').value = 'faldoorch';
+    shadow.getElementById('fdsNick').dispatchEvent(new Event('input', { bubbles: true }));
+    ok('nick input updates preview', shadow.getElementById('fdsPv').textContent === 'faldoorch');
+    ok('nick hint confirms nick', shadow.getElementById('fdsNickHint').textContent.includes('faldoorch'));
+
+    /* --- свёрнутая кнопка --- */
+    model.close();
+    const bb = bubble();
+    ok('bubble is visible when panel is closed', !bb.hidden && panel().hidden);
+    ok('bubble uses a cat icon', !!bb.querySelector('.cat svg'));
+    ok('bubble is 38 px [' + bb.offsetWidth + ']', bb.offsetWidth === 38 && bb.offsetHeight === 38);
+    ok('bubble rests quiet', Number(getComputedStyle(bb).opacity) < 0.75);
+
+    /* --- чат --- */
     const latestChat = document.querySelector('ol.cy-chat-l > li:last-child');
-    ok('latest chat message remains intact', latestChat.textContent.includes('@faldoorch') && !latestChat.querySelector('[data-fds-mention]') && !latestChat.classList.contains('fds-name'));
+    ok('latest chat message remains intact',
+      latestChat.textContent.includes('@faldoorch') && !latestChat.querySelector('[data-fds-mention]') && !latestChat.classList.contains('fds-name'));
     const chatList = document.querySelector('ol.cy-chat-l');
     model.cfg.nick = 'pupok309';
+    model.scan();
     const dynamicChat = document.createElement('li');
     dynamicChat.setAttribute('data-nick', 'pupok309');
     dynamicChat.innerHTML = '<b data-nick="pupok309">pupok309</b> <span>динамическое @faldoorch</span>';
     chatList.insertBefore(dynamicChat, chatList.firstElementChild);
     model.scan();
-    ok('dynamic latest message remains visible', dynamicChat.isConnected && dynamicChat.textContent.includes('динамическое @faldoorch') && !dynamicChat.classList.contains('fds-name'));
+    ok('dynamic latest message remains visible',
+      dynamicChat.isConnected && dynamicChat.textContent.includes('динамическое @faldoorch') && !dynamicChat.classList.contains('fds-name'));
     ok('dynamic latest sender keeps shimmer', dynamicChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name'));
-    model.loot.setState({
-      round: { id: 'active', item_name: 'Тестовый меч', rarity: 'эпическая', status: 'active', ends_at: new Date(Date.now() + 120000).toISOString() },
-      rolls: [{ id: 'r1', round_id: 'active', user_id: 'other', nick: 'pupok309', roll: 87 }],
-      server_now: new Date().toISOString(),
-    });
-    model.loot.open();
-    model.cfg.nick = 'pupok309';
-    model.refresh();
-    model.loot.open();
-    ok('item and rarity render', shadow.getElementById('fdsLootBody').textContent.includes('Тестовый меч') && shadow.getElementById('fdsLootBody').textContent.includes('эпическая'));
-    ok('latest sender keeps shimmer', latestChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name'));
-    ok('announcement stays in UI', shadow.getElementById('fdsLootNotice').textContent.includes('ВНИМАНИЕ ЛЕГИОН!'));
-    ok('announcement is not duplicated', shadow.querySelectorAll('.loot-announcement').length === 1);
-    ok('journal renders roll', shadow.querySelector('.loot-journal').textContent.includes('87'));
-    model.loot.setState({
-      round: { id: 'active', item_name: 'Тестовый меч', rarity: 'эпическая', status: 'active', ends_at: new Date(Date.now() + 120000).toISOString() },
-      rolls: [
-        { id: 'r2', round_id: 'active', user_id: 'other-2', nick: 'Другой игрок', roll: 99 },
-        { id: 'r1', round_id: 'active', user_id: 'other', nick: 'pupok309', roll: 87 },
-      ],
-      server_now: new Date().toISOString(),
-    });
-    ok('new server roll appears for everyone', shadow.querySelector('.loot-journal').textContent.includes('Другой игрок') && shadow.querySelector('.loot-journal').textContent.includes('99'));
-    ok('participant cannot see owner controls', shadow.getElementById('fdsLootOwner').hidden);
-    model.cfg.nick = 'faldoorch';
-    model.refresh();
-    model.loot.open();
-    ok('faldoorch sees owner controls', !shadow.getElementById('fdsLootOwner').hidden);
-    model.loot.setState({
-      round: { id: 'expired', item_name: 'Старый предмет', rarity: 'серая', status: 'active', ends_at: new Date(Date.now() - 1000).toISOString() },
-      rolls: [], server_now: new Date().toISOString(),
-    });
-    ok('expired round disables roll', shadow.getElementById('fdsLootRoll').disabled);
-    model.loot.setState({ round: null, rolls: [], server_now: new Date().toISOString() });
-    ok('empty state renders', shadow.getElementById('fdsLootBody').textContent.includes('нет активного разролла'));
-    model.loot.setState({
-      round: { id: 'live-timer', item_name: 'Live timer', rarity: 'серая', status: 'active', ends_at: new Date(Date.now() + 5000).toISOString() },
-      rolls: [], server_now: new Date().toISOString(),
-    });
-    model.loot.open();
-    const timerBefore = shadow.querySelector('.loot-timer').textContent;
-    setTimeout(() => {
-      const timerAfter = shadow.querySelector('.loot-timer').textContent;
-      ok('live timer ticks every second', model.loot.timerTicks() >= 2);
-      model.loot.setState({
-        round: { id: 'live-timer', item_name: 'Live timer', rarity: 'серая', status: 'active', ends_at: new Date(Date.now() - 1000).toISOString() },
-        rolls: [], server_now: new Date().toISOString(),
-      });
-      setTimeout(() => {
-        ok('live timer updates without state reload [' + shadow.querySelector('.loot-timer').textContent + ']', shadow.querySelector('.loot-timer').textContent === 'завершён');
-        ok('live timer disables roll after expiry [' + shadow.getElementById('fdsLootRoll').disabled + ']', shadow.getElementById('fdsLootRoll').disabled);
-        model.cfg.nick = 'pupok309';
-        const observedChat = document.createElement('li');
-        observedChat.setAttribute('data-nick', 'pupok309');
-        observedChat.innerHTML = '<b data-nick="pupok309">pupok309</b> <span>сообщение через observer @faldoorch</span>';
-        chatList.appendChild(observedChat);
-        model.scan();
-        const finishObserverCheck = () => {
-          ok('observer message remains visible', observedChat.isConnected && observedChat.textContent.includes('сообщение через observer @faldoorch') && !observedChat.classList.contains('fds-name'));
-          ok('observer sender keeps shimmer', observedChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name'));
-          document.getElementById('out').textContent = rows.join('\n') + '\n\nитог: ' + rows.filter((row) => row.startsWith('OK')).length + '/' + rows.length + ' OK';
-        };
-        const waitForObserver = (left) => {
-          if (observedChat.querySelector('b[data-nick="pupok309"]').classList.contains('fds-name') || left <= 0) {
-            finishObserverCheck();
-            return;
-          }
-          setTimeout(() => waitForObserver(left - 50), 50);
-        };
-        waitForObserver(1000);
-      }, 1200);
-    }, 2200);
+    ok('CSP-safe mode does not open WebSocket', window.__FDS_WEBSOCKET_ATTEMPTS__ === 0);
+
+    if (location.search.includes('bubble=1')) model.close();
+    else model.open();
+    finish();
   } catch (error) {
     document.getElementById('out').textContent = 'ERROR: ' + error.message + '\n' + error.stack;
   }
