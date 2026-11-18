@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Легион — Аддон для чата (colors)</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; padding: 0 64px; min-height: 100vh;
+    display: flex; align-items: center;
+    background: radial-gradient(120% 110% at 12% -10%, #211b3a 0%, #0d0b13 55%, #09080d 100%);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #cdc6e0;
+  }
+  .chat {
+    width: 700px; max-width: 100%;
+    border-radius: 14px; overflow: hidden;
+    background: #14121d;
+    border: 1px solid #272235;
+    box-shadow: 0 28px 60px rgba(0, 0, 0, .5);
+  }
+  .chat header {
+    display: flex; align-items: center; gap: 9px;
+    padding: 13px 16px; font-size: 13px; color: #9d95b8;
+    background: #191624; border-bottom: 1px solid #272235;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #4ea86b; box-shadow: 0 0 0 3px rgba(78, 168, 107, .16); }
+  .chat header .count { margin-left: auto; font-size: 12px; color: #6f6889; }
+  .cy-chat-l { margin: 0; padding: 16px 18px; list-style: none; display: grid; gap: 11px; }
+  .cy-chat-l li { font-size: 14.5px; color: #b3abc9; }
+  .cy-chat-l b { font-size: 15px; font-weight: 700; letter-spacing: .1px; margin-right: 7px; }
+</style>
+</head>
+<body>
+  <section class="chat">
+    <header><span class="dot"></span>Чат Легиона<span class="count">4 онлайн</span></header>
+    <ol class="cy-chat-l">
+      <li><b data-nick="faldoorch">faldoorch</b>сбор на арену в 21:00, кто идёт</li>
+      <li><b data-nick="pupok309">pupok309</b>я в деле @faldoorch</li>
+      <li><b data-nick="shram">shram</b>плюс, буду к девяти</li>
+      <li><b data-nick="pupok309">pupok309</b>краски завезли, глянь панель</li>
+      <li><b data-nick="shram">shram</b>уже поставил себе карамель</li>
+      <li><b data-nick="faldoorch">faldoorch</b>заметно, ник как леденец</li>
+      <li><b data-nick="shram">shram</b>го в данж после арены</li>
+      <li><b data-nick="pupok309">pupok309</b>только недолго, у меня рейд</li>
+      <li><b data-nick="faldoorch">faldoorch</b>ок, ствол беру</li>
+    </ol>
+  </section>
+
+<script>
+  const mem = {};
+  window.GM_getValue = (key, fallback) => (key in mem ? mem[key] : fallback);
+  window.GM_setValue = (key, value) => { mem[key] = value; };
+  window.GM_registerMenuCommand = () => {};
+  window.__FDS_TEST__ = true;
+  window.WebSocket = function () { throw new Error('offline preview'); };
+  window.__FDS_SHARED_JSON__ = { faldoorch: 'gold', shram: 'candy' };
+  mem.fds_cfg_v1 = JSON.stringify({
+    nick: 'pupok309', paint: 'aurora', asked: true,
+    enabled: true, shine: true, mentions: true, speed: 8, glow: 7,
+  });
+</script>
+<script src="../legion-guild.user.js"></script>
+<script>
+  setTimeout(() => {
+    const model = window.FaldoorchShimmer;
+    if (location.search.includes('bubble=1')) model.close();
+    else model.open();
+
+    if (location.search.includes('rects=1')) {
+      const root = document.getElementById('fds-host').shadowRoot;
+      const box = (el) => {
+        const r = el.getBoundingClientRect();
+        return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)];
+      };
+      document.title = JSON.stringify({
+        grid: box(root.getElementById('fdsPaints')),
+        panel: box(root.querySelector('.panel')),
+        bubble: box(root.querySelector('.bubble')),
+        view: [window.innerWidth, window.innerHeight],
+      });
+    }
+  }, 80);
+</script>
+</body>
+</html>

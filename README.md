@@ -1,39 +1,54 @@
-# Легион - Аддон для чата (colors)
+<div align="center">
 
-Userscript для чата Legion Game:
+<img src="docs/hero.png" width="100%" alt="Панель «Переливание ника» поверх чата Legion">
 
-- 40 уникальных анимированных переливашек ника;
-- общий список ников и красок через Supabase Realtime;
-- сворачиваемая кнопка-котик;
-- перетаскиваемая панель с сохранением позиции;
-- автоматические обновления через Tampermonkey.
+<br>
 
-## Установка
+# Легион — Аддон для чата (colors)
 
-1. Установить [Tampermonkey](https://www.tampermonkey.net/).
-2. Открыть raw-файл userscript:
-   <https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.10.1/legion-guild.user.js>
-3. Нажать **Install**.
+Ники в чате переливаются всеми цветами: свой настраивается в панели,<br>
+чужие приходят из общего списка.
 
-Стили работают только у пользователей, у которых установлен этот userscript.
+<a href="https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.10.1/legion-guild.user.js">
+  <img src="https://img.shields.io/badge/install-tampermonkey-9A3324?style=for-the-badge&logo=tampermonkey&logoColor=F4EFE2" alt="Установить в Tampermonkey">
+</a>
+&nbsp;
+<img src="https://img.shields.io/badge/version-1.10.1-1A1712?style=for-the-badge" alt="Версия 1.10.1">
+&nbsp;
+<img src="https://img.shields.io/badge/paints-40-9A3324?style=for-the-badge" alt="40 красок">
 
-## Общий список
+</div>
 
-Файл [`paints.json`](./paints.json) содержит соответствия `ник → id краски`:
+<br>
 
-```json
-{
-  "faldoorch": "aurora",
-  "другой_ник": "cyber"
-}
-```
+<table>
+<tr>
+<td align="center" width="33%"><h3>40 красок</h3><sub>у каждой своя траектория перелива</sub></td>
+<td align="center" width="33%"><h3>Свой стиль</h3><sub>скорость, свечение, блик, @упоминания</sub></td>
+<td align="center" width="33%"><h3>Не мешает</h3><sub>сворачивается в кнопку-котика</sub></td>
+</tr>
+</table>
 
-После изменения файла и публикации в `main` пользователям достаточно обновить страницу. Скрипт периодически обновляет список и хранит последний успешный вариант в кэше.
+<img src="docs/paints.png" width="100%" alt="Палитра: 40 красок с названиями">
 
-Выбор краски каждого участника синхронизируется отдельно через Supabase: свой ник получает локальную краску, а остальные участники — только свою опубликованную краску. Список обновляется через разрешённые HTTP-запросы примерно раз в 5 секунд и включён всегда.
+## Поставить
 
-Доступные id красок: `aurora`, `rainbow`, `holo`, `sunset`, `gold`, `cyber`, `candy`, `ice`, `mint`, `ocean`, `sakura`, `lava`, `matrix`, `toxic`, `fire`, `emerald`, `chrome`, `lavender`, `tropical`, `cosmos`, `neon`, `peach`, `rose`, `steel`, `copper`, `sky`, `forest`, `sand`, `violet`, `ruby`, `amber`, `graphite`, `gum`, `lagoon`, `plasma`, `honey`, `storm`, `cotton`, `jade`, `dusk`.
+1. Поставь [Tampermonkey](https://www.tampermonkey.net/).
+2. Открой [`legion-guild.user.js`](https://raw.githubusercontent.com/faldoor/legion-guild-extension/refs/tags/v1.10.1/legion-guild.user.js).
+3. Нажми **Install**.
 
-## Тесты
+<img src="docs/bubble.png" width="64" align="right" alt="Кнопка-котик">
 
-`tests/shimmer-ui.html` — автономный харнесс: подменяет `GM_getValue`/`GM_setValue` и `WebSocket`, отключает сеть и печатает список проверок. Открывается напрямую в браузере; `?bubble=1` показывает свёрнутую кнопку.
+Панель — «формуляр»: краска, скорость, свечение, три галочки и поле «чей ник
+переливается». Ничего не отправляется в чат, всё работает локально и в браузере.
+
+<br clear="all">
+
+<details>
+<summary>Ещё</summary>
+
+- Список красок гильдии: [`paints.json`](paints.json)
+- Проверки интерфейса: [`tests/shimmer-ui.html`](tests/shimmer-ui.html) — 37 проверок, открывается в браузере
+- Витрина для скриншотов: [`docs/demo.html`](docs/demo.html)
+
+</details>
