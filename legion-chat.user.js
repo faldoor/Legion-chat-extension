@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Легион - Аддон для чата (colors)
 // @namespace    https://legiongame.gg/
-// @version      1.10.1
+// @version      1.11.0
 // @description  Аддон для чата Легиона: сорок переливашек ника.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
 // @connect      xqwdpnpvfxvzmtmmupev.supabase.co
-// @updateURL    https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/legion-guild.user.js
-// @downloadURL  https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/legion-guild.user.js
+// @updateURL    https://raw.githubusercontent.com/faldoor/Legion-chat-extension/main/legion-chat.user.js
+// @downloadURL  https://raw.githubusercontent.com/faldoor/Legion-chat-extension/main/legion-chat.user.js
 // ==/UserScript==
 
 (function () {
@@ -27,7 +27,7 @@
 
   const KEY = 'fds_cfg_v1';
   const PLACEHOLDER = 'твой ник';
-  const SHARED_URL = 'https://raw.githubusercontent.com/faldoor/legion-guild-extension/main/paints.json';
+  const SHARED_URL = 'https://raw.githubusercontent.com/faldoor/Legion-chat-extension/main/paints.json';
   const SHARED_KEY = 'fds_shared_v1';
   const SHARED_TTL = 6 * 60 * 60 * 1000;
   const SUPABASE_URL = 'https://xqwdpnpvfxvzmtmmupev.supabase.co';
@@ -119,7 +119,7 @@
     try { localStorage.setItem(KEY, s); } catch (e) { /* ignore */ }
   }
 
-  /* ---------- shared guild list ---------- */
+  /* ---------- shared paint list ---------- */
 
   let sharedPaints = {};
   let sharedStamp = 0;
@@ -215,7 +215,7 @@
     }
   }
 
-  /* ---------- realtime guild sync ---------- */
+  /* ---------- realtime paint sync ---------- */
 
   function readCloudCache() {
     let raw = '';

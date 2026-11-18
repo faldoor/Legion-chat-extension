@@ -33,7 +33,7 @@
   };
   mem.fds_cfg_v1 = JSON.stringify({ shared: false, nick: 'pupok309' });
 </script>
-<script src="../legion-guild.user.js"></script>
+<script src="../legion-chat.user.js"></script>
 <script>
 setTimeout(() => {
   const rows = [];
@@ -97,8 +97,8 @@ setTimeout(() => {
     ok('no aliases field', !shadow.getElementById('fdsAliases'));
     ok('no aliases in config', model.cfg.aliases === undefined);
     ok('no shared-list toggle', !shadow.getElementById('fdsShared') && !shadow.getElementById('fdsSharedReload'));
-    ok('no guild list line', !shadow.getElementById('fdsSharedInfo') && !/Гильдейский список/.test(text));
-    ok('no guild list wording in panel', !/Гильдейск/.test(shadow.innerHTML));
+    ok('no list status line', !shadow.getElementById('fdsSharedInfo'));
+    ok('panel shows no status note', !shadow.querySelector('.panel > .note'));
     ok('no browser-only caption', !/Работает только у тебя в браузере/.test(text));
     ok('no setup block', !shadow.getElementById('fdsSetup'));
 
