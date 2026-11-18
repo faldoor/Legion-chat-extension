@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Легион - Гильдейское расширение
+// @name         Легион - Аддон для чата (colors)
 // @namespace    https://legiongame.gg/
-// @version      1.10.0
-// @description  Гильдейское расширение для чата Легиона: сорок переливашек ника и общий список гильдии.
+// @version      1.10.1
+// @description  Аддон для чата Легиона: сорок переливашек ника.
 // @author       faldoorch
 // @match        https://legiongame.gg/*
 // @match        https://play.multidonate.ru/*
@@ -123,12 +123,10 @@
 
   let sharedPaints = {};
   let sharedStamp = 0;
-  let sharedState = 'idle';
   let cloudPaints = {};
   let cloudRows = {};
   let cloudSession = null;
   let cloudAuthPromise = null;
-  let cloudState = 'idle';
   let cloudPoll = 0;
   let cloudPublishTimer = 0;
   let cloudSyncInterval = 0;
@@ -171,7 +169,6 @@
     if (!cached || !cached.paints) return;
     sharedPaints = sanitizeShared(cached.paints);
     sharedStamp = Number(cached.ts) || 0;
-    if (sharedStamp) sharedState = 'ok';
   }
 
   function writeSharedCache() {
@@ -182,37 +179,20 @@
 
   function applySharedPayload(raw) {
     const data = typeof raw === 'string' ? readJson(raw) : raw;
-    if (!data || typeof data !== 'object') {
-      sharedState = 'error';
-      updateSharedInfo();
-      return;
-    }
-    const src = data.users && typeof data.users === 'object' ? data.users : data;
+    if (!data || typeof data !== 'object') return;
     sharedPaints = sanitizeShared(data);
     sharedStamp = Date.now();
-    sharedState = Object.keys(sharedPaints).length || !Object.keys(src).length ? 'ok' : 'error';
     writeSharedCache();
     refresh();
-    updateSharedInfo();
   }
 
   function loadShared(force) {
-    if (!force && sharedStamp && Date.now() - sharedStamp < SHARED_TTL) {
-      sharedState = 'ok';
-      updateSharedInfo();
-      return;
-    }
+    if (!force && sharedStamp && Date.now() - sharedStamp < SHARED_TTL) return;
     if (window.__FDS_SHARED_JSON__ != null) {
       applySharedPayload(window.__FDS_SHARED_JSON__);
       return;
     }
-    sharedState = 'loading';
-    updateSharedInfo();
     const url = SHARED_URL + (SHARED_URL.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
-    const fail = () => {
-      sharedState = 'error';
-      updateSharedInfo();
-    };
     if (typeof GM_xmlhttpRequest === 'function') {
       try {
         GM_xmlhttpRequest({
@@ -221,12 +201,9 @@
           timeout: 15000,
           onload: (res) => {
             if (res.status >= 200 && res.status < 300) applySharedPayload(res.responseText);
-            else fail();
           },
-          onerror: fail,
-          ontimeout: fail,
         });
-      } catch (e) { fail(); }
+      } catch (e) { /* keep the cached list */ }
     } else if (typeof fetch === 'function') {
       fetch(url, { cache: 'no-store' })
         .then((res) => {
@@ -234,9 +211,7 @@
           return res.text();
         })
         .then(applySharedPayload)
-        .catch(fail);
-    } else {
-      fail();
+        .catch(() => { /* keep the cached list */ });
     }
   }
 
@@ -360,7 +335,6 @@
     rebuildCloudPaints();
     writeCloudCache();
     refresh();
-    updateSharedInfo();
   }
 
   function applyCloudChange(event, record, oldRecord) {
@@ -371,7 +345,6 @@
     rebuildCloudPaints();
     writeCloudCache();
     refresh();
-    updateSharedInfo();
   }
 
   async function loadCloudPaints() {
@@ -384,11 +357,7 @@
         session.access_token
       );
       applyCloudRows(rows);
-      cloudState = 'ok';
-      updateSharedInfo();
     } catch (e) {
-      cloudState = 'error';
-      updateSharedInfo();
       scheduleCloudPoll();
     }
   }
@@ -411,11 +380,9 @@
         { user_id: session.user.id, nick: cfg.nick, paint_id: cfg.paint, updated_at: new Date().toISOString() },
         session.access_token
       );
-      cloudState = 'ok';
       loadCloudPaints();
     } catch (e) {
-      cloudState = 'error';
-      updateSharedInfo();
+      /* keep the last known list */
     }
   }
 
@@ -857,9 +824,6 @@
     .chk input:focus-visible + .box { outline: 2px solid var(--p-focus); outline-offset: 2px; }
     .chk .lbl { font-size: 12px; color: var(--p-ink-2); }
 
-    .note { margin: 7px 0 0; font-size: 10.5px; line-height: 1.45; color: var(--p-muted); }
-    .note.ok { color: #4a6b3a; }
-    .note.warn { color: var(--p-accent); }
     .hint { margin: 0; font-size: 10.5px; line-height: 1.45; color: var(--p-muted); }
     .hint.ok { color: #4a6b3a; }
     .hint.warn { color: var(--p-accent); }
@@ -1092,7 +1056,6 @@
           <label class="chk"><input type="checkbox" id="fdsMentions"><span class="box"></span><span class="lbl">Подсвечивать @упоминания</span></label>
           <label class="chk"><input type="checkbox" id="fdsEnabled"><span class="box"></span><span class="lbl">Включено</span></label>
         </div>
-        <p class="note" id="fdsSharedInfo">Гильдейский список: …</p>
 
         <div class="field">
           <span>Чей ник переливается</span>
@@ -1248,37 +1211,6 @@
     hint.classList.toggle('warn', !cfg.nick);
   }
 
-  function plural(n, one, few, many) {
-    const m10 = n % 10;
-    const m100 = n % 100;
-    if (m10 === 1 && m100 !== 11) return one;
-    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-    return many;
-  }
-
-  function updateSharedInfo() {
-    if (!shadow) return;
-    const el = shadow.getElementById('fdsSharedInfo');
-    if (!el) return;
-    const count = Object.keys(allSharedPaints()).length;
-    el.classList.remove('ok', 'warn');
-    if (sharedState === 'loading' || cloudState === 'loading') {
-      el.textContent = 'Гильдейский список: загружаю…';
-      return;
-    }
-    if (sharedState === 'error' && !count) {
-      el.textContent = 'Гильдейский список не загрузился';
-      el.classList.add('warn');
-      return;
-    }
-    if (count) {
-      el.textContent = 'Гильдейский список: ' + count + ' ' + plural(count, 'ник', 'ника', 'ников');
-      el.classList.add(cloudState === 'error' ? 'warn' : 'ok');
-    } else {
-      el.textContent = 'Гильдейский список пуст';
-    }
-  }
-
   function syncPanel() {
     if (!shadow) return;
     const paint = currentPaint();
@@ -1300,7 +1232,6 @@
     shadow.getElementById('fdsPv').classList.toggle('off', !cfg.enabled);
     shadow.getElementById('fdsPv').classList.toggle('no-shine', !cfg.shine);
     syncBubble();
-    updateSharedInfo();
   }
 
   function openPanel() {
@@ -1353,8 +1284,6 @@
     refresh();
     loadShared(false);
     if (!TEST) {
-      cloudState = 'loading';
-      updateSharedInfo();
       loadCloudPaints();
       scheduleCloudPublish();
     }
